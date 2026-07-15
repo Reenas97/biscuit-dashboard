@@ -463,6 +463,30 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .unavailable-list time { color: $brown; font-size: 9px; font-weight: 800; }
 .unavailable-list span { overflow: hidden; color: $muted; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .unavailable-list button { border: 0; background: transparent; color: color.mix($pink, $dark-brown, 58%); cursor: pointer; }
+.goals-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.goals-summary article { padding: 19px; border: 1px solid $line; border-radius: 15px; background: rgba($paper, .92); }
+.goals-summary span { display: block; color: $muted; font-size: 10px; }
+.goals-summary strong { display: block; margin-top: 8px; color: $dark-brown; font-family: Georgia, serif; font-size: 22px; font-weight: 500; }
+.goals-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.goal-card { padding: 20px; border: 1px solid $line; border-radius: 17px; background: rgba($paper, .95); box-shadow: 0 9px 25px rgba($dark-brown, .06); }
+.goal-card.completed { border-color: rgba(#568264, .35); }
+.goal-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.goal-card-heading > span { color: $pink; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.goal-card-heading > strong { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 999px; background: rgba(#568264, .13); color: #568264; font-size: 8px; }
+.goal-card h3 { margin: 15px 0 17px; color: $dark-brown; font-family: Georgia, serif; font-size: 19px; font-weight: 500; }
+.goal-progress-label { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+.goal-progress-label span { color: $muted; font-size: 9px; }
+.goal-progress-label span:last-child { text-align: right; }
+.goal-progress-label b { color: $dark-brown; font-size: 11px; }
+.goal-progress { height: 9px; overflow: hidden; margin-top: 8px; border-radius: 999px; background: $cream; }
+.goal-progress span { height: 100%; display: block; border-radius: inherit; background: linear-gradient(90deg, $blush, $pink); }
+.goal-card.completed .goal-progress span { background: #77a383; }
+.goal-deadline { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; padding: 11px; border-radius: 10px; background: $cream; }
+.goal-deadline span { color: $muted; font-size: 8px; text-transform: uppercase; }
+.goal-deadline strong { color: $dark-brown; font-size: 9px; text-align: right; }
+.goal-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 13px; border-top: 1px solid $line; }
+.goal-actions button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: $brown; font-size: 10px; cursor: pointer; }
+.goal-actions button:last-child { color: color.mix($pink, $dark-brown, 58%); }
 .materials-summary span { display: block; color: $muted; font-size: 10px; }
 .materials-summary strong { display: block; margin-top: 8px; color: $dark-brown; font-family: Georgia, serif; font-size: 22px; font-weight: 500; }
 .material-card { padding: 20px; border: 1px solid $line; border-radius: 17px; background: rgba($paper, .94); box-shadow: 0 9px 25px rgba($dark-brown, .06); }
@@ -522,6 +546,8 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .dashboard-next-project > a { display: inline-flex; align-items: center; gap: 8px; color: $brown; font-size: 11px; font-weight: 700; text-decoration: none; }
 
 @media (max-width: 620px) {
+  .goals-grid { grid-template-columns: 1fr; }
+  .goals-summary { grid-template-columns: 1fr; }
   .clients-grid { grid-template-columns: 1fr; }
   .clients-toolbar { align-items: stretch; flex-direction: column; }
   .dashboard-next-project { align-items: flex-start; flex-wrap: wrap; }
