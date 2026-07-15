@@ -184,11 +184,6 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .scene-paw-two { top: 35px; left: 0; transform: rotate(17deg) scale(.72); }
 
 .summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-top: 18px;
-
   article { padding: 22px; border: 1px solid $line; border-radius: 16px; background: $paper; }
   span { display: block; color: $muted; font-size: 12px; }
   strong { display: block; margin: 10px 0 4px; font-family: Georgia, serif; font-size: 30px; font-weight: 500; color: $brown; }
@@ -230,7 +225,6 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
   .nav-item { justify-content: center; padding-inline: 8px; }
   .nav-icon { font-size: 19px; }
   .sidebar-footer { justify-content: center; padding-inline: 0; > div:last-child { display: none; } }
-  .summary-grid { grid-template-columns: 1fr; }
   .cat-scene { display: none; }
   .welcome-card { padding: 30px 26px; }
 }

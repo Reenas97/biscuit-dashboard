@@ -17,7 +17,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <div className="summary-grid">
+      <div className="summary-grid mt-[18px] grid grid-cols-1 gap-4 md:grid-cols-3">
         <article><span>Projetos ativos</span><strong>0</strong><small>Prontos para começar</small></article>
         <article><span>Próximas entregas</span><strong>0</strong><small>Nenhum prazo próximo</small></article>
         <article><span>Ideias salvas</span><strong>0</strong><small>Seu banco de inspirações</small></article>
