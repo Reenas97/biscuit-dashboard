@@ -65,10 +65,13 @@ type Material = {
   createdAt: string
 }
 
+type Client = { id: string; name: string }
+
 type ProjectForm = Omit<Project, 'id' | 'sourceIdeaId' | 'createdAt' | 'tags'> & { tags: string }
 
 const projectStorageKey = 'reena-biscuit-projects'
 const materialStorageKey = 'reena-biscuit-materials'
+const clientStorageKey = 'reena-biscuit-clients'
 const emptyProjectForm: ProjectForm = { title: '', description: '', category: '', tags: '', type: 'Pessoal', client: '', deadline: '', referenceLink: '', status: 'Planejamento' }
 
 function loadProjects() {
@@ -81,6 +84,12 @@ function loadMaterials() {
   const saved = localStorage.getItem(materialStorageKey)
   if (!saved) return []
   try { return JSON.parse(saved) as Material[] } catch { return [] }
+}
+
+function loadClients() {
+  const saved = localStorage.getItem(clientStorageKey)
+  if (!saved) return []
+  try { return JSON.parse(saved) as Client[] } catch { return [] }
 }
 
 function KanbanCard({ project, onOpen }: { project: Project; onOpen: (id: string) => void }) {
@@ -126,6 +135,7 @@ export function ProjectsPage() {
   const [form, setForm] = useState<ProjectForm | null>(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [materials, setMaterials] = useState<Material[]>(loadMaterials)
+  const [clients] = useState<Client[]>(loadClients)
   const [materialId, setMaterialId] = useState('')
   const [materialQuantity, setMaterialQuantity] = useState('')
   const [materialError, setMaterialError] = useState('')
@@ -310,7 +320,7 @@ export function ProjectsPage() {
                 <label className="form-field">Tipo<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as Project['type'] })}><option>Pessoal</option><option>Encomenda</option></select></label>
                 <label className="form-field">Categoria<input required value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} /></label>
               </div>
-              {form.type === 'Encomenda' && <label className="form-field form-field--full">Cliente<input required value={form.client} onChange={(event) => setForm({ ...form, client: event.target.value })} /></label>}
+              {form.type === 'Encomenda' && <label className="form-field form-field--full">Cliente<select required value={form.client} onChange={(event) => setForm({ ...form, client: event.target.value })}><option value="">Selecione um cliente...</option>{form.client && !clients.some((client) => client.name === form.client) && <option value={form.client}>{form.client}</option>}{clients.map((client) => <option key={client.id} value={client.name}>{client.name}</option>)}</select>{clients.length === 0 && <small>Nenhum cliente cadastrado. Cadastre um cliente na página Clientes antes de criar a encomenda.</small>}</label>}
               <label className="form-field form-field--full">Tags<input value={form.tags} onChange={(event) => setForm({ ...form, tags: event.target.value })} /><small>Separe as tags por vírgulas.</small></label>
               <label className="form-field form-field--full">Link de referência<input type="url" value={form.referenceLink} onChange={(event) => setForm({ ...form, referenceLink: event.target.value })} placeholder="https://pinterest.com/..." /><small>Pode ser Pinterest, Instagram ou outro site.</small></label>
               <div className="modal-actions"><button className="secondary-button" onClick={closeEdit} type="button">Cancelar</button><button className="primary-button" type="submit">{editingId ? 'Salvar alterações' : 'Criar projeto'}</button></div>

@@ -394,6 +394,24 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .kanban-open { width: 100%; display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding: 11px 0 0; border: 0; border-top: 1px solid $line; background: transparent; color: $brown; font-size: 10px; font-weight: 700; cursor: pointer; }
 .kanban-empty { display: grid; place-items: center; min-height: 88px; padding: 15px; border: 1px dashed $line; border-radius: 11px; color: color.mix($muted, $cream, 62%); text-align: center; font-size: 10px; }
 .materials-summary article { padding: 19px; border: 1px solid $line; border-radius: 15px; background: rgba($paper, .92); }
+.clients-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.clients-toolbar label { min-width: 0; width: min(460px, 100%); display: flex; align-items: center; gap: 10px; padding: 0 14px; border: 1px solid $line; border-radius: 12px; background: rgba($paper, .94); color: $muted; }
+.clients-toolbar input { width: 100%; padding: 13px 0; border: 0; outline: 0; background: transparent; color: $ink; font: inherit; font-size: 11px; }
+.clients-toolbar > span { color: $muted; font-size: 10px; white-space: nowrap; }
+.clients-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.client-card { display: grid; align-content: start; padding: 20px; border: 1px solid $line; border-radius: 17px; background: rgba($paper, .94); box-shadow: 0 9px 25px rgba($dark-brown, .06); }
+.client-card-heading { display: flex; align-items: center; gap: 12px; }
+.client-avatar { width: 43px; height: 43px; display: grid; place-items: center; flex: 0 0 43px; border-radius: 50%; background: $blush; color: $dark-brown; }
+.client-card-heading h3 { margin: 0; color: $dark-brown; font-family: Georgia, serif; font-size: 18px; font-weight: 500; }
+.client-card-heading span { display: block; margin-top: 3px; color: $muted; font-size: 9px; }
+.client-contact { display: flex; flex-wrap: wrap; gap: 7px 13px; margin-top: 17px; }
+.client-contact a, .client-contact span { display: inline-flex; align-items: center; gap: 5px; color: $brown; font-size: 10px; text-decoration: none; }
+.client-card > p { display: -webkit-box; overflow: hidden; margin: 15px 0 0; color: $muted; font-size: 10px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.client-actions { display: flex; align-items: center; gap: 13px; margin-top: 18px; padding-top: 13px; border-top: 1px solid $line; }
+.client-actions a, .client-actions button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: $brown; font-size: 10px; text-decoration: none; cursor: pointer; }
+.client-actions .client-whatsapp { color: #568264; font-weight: 700; }
+.client-actions button:nth-last-child(2) { margin-left: auto; }
+.client-actions button:last-child { color: color.mix($pink, $dark-brown, 58%); }
 .materials-summary span { display: block; color: $muted; font-size: 10px; }
 .materials-summary strong { display: block; margin-top: 8px; color: $dark-brown; font-family: Georgia, serif; font-size: 22px; font-weight: 500; }
 .material-card { padding: 20px; border: 1px solid $line; border-radius: 17px; background: rgba($paper, .94); box-shadow: 0 9px 25px rgba($dark-brown, .06); }
@@ -453,6 +471,8 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .dashboard-next-project > a { display: inline-flex; align-items: center; gap: 8px; color: $brown; font-size: 11px; font-weight: 700; text-decoration: none; }
 
 @media (max-width: 620px) {
+  .clients-grid { grid-template-columns: 1fr; }
+  .clients-toolbar { align-items: stretch; flex-direction: column; }
   .dashboard-next-project { align-items: flex-start; flex-wrap: wrap; }
   .dashboard-next-project > a { width: 100%; padding-left: 65px; }
   .project-detail-grid { grid-template-columns: 1fr; }
