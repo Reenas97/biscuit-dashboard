@@ -168,6 +168,7 @@ export function IdeasPage() {
       type: projectForm.type,
       client: projectForm.client.trim(),
       deadline: projectForm.deadline,
+      referenceLink: convertingIdea.link,
       status: 'Planejamento',
       sourceIdeaId: convertingIdea.id,
       createdAt: new Date().toISOString(),

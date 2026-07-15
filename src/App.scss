@@ -373,7 +373,42 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .project-card > p { min-height: 42px; color: $muted; font-size: 12px; line-height: 1.55; }
 .project-info { display: flex; flex-wrap: wrap; gap: 12px; margin: 17px 0; color: $brown; font-size: 11px; }
 .project-info span { display: inline-flex; align-items: center; gap: 6px; }
-.project-delete { display: inline-flex; align-items: center; gap: 7px; margin-top: 18px; padding: 10px 0 0; border: 0; border-top: 1px solid $line; background: transparent; color: color.mix($pink, $dark-brown, 58%); font-size: 11px; cursor: pointer; }
+.project-open { width: 100%; display: flex; align-items: center; justify-content: space-between; margin-top: 18px; padding: 13px 0 0; border: 0; border-top: 1px solid $line; background: transparent; color: $brown; font-size: 11px; font-weight: 700; cursor: pointer; }
+.kanban-board { display: grid; grid-auto-columns: minmax(270px, 285px); grid-auto-flow: column; gap: 14px; overflow-x: auto; margin-right: calc(clamp(24px, 4vw, 58px) * -1); padding: 2px clamp(24px, 4vw, 58px) 20px 2px; scroll-snap-type: x proximity; }
+.kanban-hint { display: flex; align-items: center; gap: 9px; color: $muted; font-size: 11px; }
+.kanban-column { min-height: 480px; padding: 12px; border: 1px solid $line; border-radius: 16px; background: rgba($cream, .82); scroll-snap-align: start; transition: 160ms ease; }
+.kanban-column.over { border-color: $pink; background: rgba($blush, .72); box-shadow: inset 0 0 0 2px rgba($pink, .12); }
+.kanban-column-heading { display: flex; align-items: center; gap: 8px; padding: 5px 4px 13px; }
+.kanban-column-heading h3 { flex: 1; margin: 0; color: $dark-brown; font-size: 12px; font-weight: 750; }
+.kanban-column-heading strong { display: grid; place-items: center; min-width: 23px; height: 23px; padding: 0 6px; border-radius: 999px; background: $paper; color: $muted; font-size: 10px; }
+.kanban-status-dot { width: 10px; height: 10px; border-radius: 50%; background: $blush; }
+.kanban-column-content { display: grid; align-content: start; gap: 10px; min-height: 415px; }
+.kanban-card { position: relative; z-index: 1; padding: 15px; border: 1px solid $line; border-radius: 13px; background: $paper; box-shadow: 0 7px 18px rgba($dark-brown, .07); transition: box-shadow 160ms ease, opacity 160ms ease; }
+.kanban-card.dragging { z-index: 10; opacity: .78; box-shadow: 0 18px 35px rgba($dark-brown, .22); }
+.kanban-card-top { display: flex; align-items: center; justify-content: space-between; color: $muted; font-size: 9px; text-transform: uppercase; letter-spacing: .07em; }
+.drag-handle { width: 30px; height: 30px; display: grid; place-items: center; margin: -7px -7px 0 0; border: 0; border-radius: 8px; background: transparent; color: $muted; cursor: grab; touch-action: none; }
+.drag-handle:hover { background: $cream; color: $brown; }
+.drag-handle:active { cursor: grabbing; }
+.kanban-card h3 { margin: 10px 0 13px; color: $dark-brown; font-family: Georgia, serif; font-size: 16px; font-weight: 500; line-height: 1.3; }
+.kanban-card p { display: flex; align-items: center; gap: 7px; margin: 5px 0 0; color: $muted; font-size: 10px; }
+.kanban-open { width: 100%; display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding: 11px 0 0; border: 0; border-top: 1px solid $line; background: transparent; color: $brown; font-size: 10px; font-weight: 700; cursor: pointer; }
+.kanban-empty { display: grid; place-items: center; min-height: 88px; padding: 15px; border: 1px dashed $line; border-radius: 11px; color: color.mix($muted, $cream, 62%); text-align: center; font-size: 10px; }
+.project-detail .modal-heading { margin-bottom: 14px; }
+.project-status-large { display: inline-block; margin-bottom: 19px; padding: 6px 10px; border-radius: 999px; background: $blush; color: $dark-brown; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; }
+.project-description { margin-bottom: 22px; }
+.project-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 19px; }
+.project-detail-grid > div { display: grid; gap: 7px; padding: 14px; border: 1px solid $line; border-radius: 12px; background: $cream; }
+.project-detail-grid span { display: flex; align-items: center; gap: 7px; color: $muted; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.project-detail-grid strong { color: $dark-brown; font-size: 12px; }
+.project-detail .detail-tags { align-items: center; }
+.project-reference { margin: 2px 0 18px; }
+.status--modelagem { background: rgba($brown, .2) !important; }
+.status--secagem { background: rgba(#d9b77b, .35) !important; }
+.status--pintura { background: rgba($light-pink, .45) !important; }
+.status--finalização { background: rgba(#bb9ec8, .32) !important; }
+.status--pronto { background: rgba(#8fbd9b, .3) !important; }
+.status--entregue { background: rgba(#78a98a, .35) !important; }
+.idea-modal form { display: grid; gap: 16px; }
 .dashboard-next-project { display: flex; align-items: center; gap: 17px; margin-top: 18px; padding: 22px; border: 1px solid $line; border-radius: 17px; background: rgba($paper, .94); box-shadow: 0 10px 28px rgba($dark-brown, .06); }
 .next-project-icon { width: 48px; height: 48px; display: grid; place-items: center; flex: 0 0 48px; border-radius: 14px; background: $blush; color: $dark-brown; }
 .dashboard-next-project > div:nth-child(2) { min-width: 0; flex: 1; }
@@ -385,6 +420,7 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 @media (max-width: 620px) {
   .dashboard-next-project { align-items: flex-start; flex-wrap: wrap; }
   .dashboard-next-project > a { width: 100%; padding-left: 65px; }
+  .project-detail-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {
