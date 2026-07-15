@@ -412,6 +412,57 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .client-actions .client-whatsapp { color: #568264; font-weight: 700; }
 .client-actions button:nth-last-child(2) { margin-left: auto; }
 .client-actions button:last-child { color: color.mix($pink, $dark-brown, 58%); }
+.planning-layout { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(280px, .8fr); align-items: start; gap: 17px; }
+.planning-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.planning-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.calendar-panel, .upcoming-panel, .tasks-panel, .unavailable-panel { border: 1px solid $line; border-radius: 17px; background: rgba($paper, .95); box-shadow: 0 9px 25px rgba($dark-brown, .05); }
+.calendar-panel { min-width: 0; overflow: hidden; }
+.calendar-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 20px; border-bottom: 1px solid $line; }
+.calendar-heading span { color: $pink; font-size: 9px; font-weight: 800; letter-spacing: .1em; }
+.calendar-heading h3 { margin: 4px 0 0; color: $dark-brown; font-family: Georgia, serif; font-size: 21px; font-weight: 500; text-transform: capitalize; }
+.calendar-heading > div:last-child { display: flex; align-items: center; gap: 5px; }
+.calendar-heading button { min-width: 31px; height: 31px; display: grid; place-items: center; padding: 0 9px; border: 1px solid $line; border-radius: 8px; background: $paper; color: $brown; font-size: 9px; cursor: pointer; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.calendar-weekdays { border-bottom: 1px solid $line; background: $cream; }
+.calendar-weekdays span { padding: 9px 4px; color: $muted; font-size: 8px; font-weight: 800; text-align: center; }
+.calendar-day { min-width: 0; min-height: 96px; padding: 8px; border-right: 1px solid $line; border-bottom: 1px solid $line; background: rgba($paper, .72); }
+.calendar-day:nth-child(7n) { border-right: 0; }
+.calendar-day.outside { background: rgba($cream, .55); opacity: .55; }
+.calendar-number { width: 23px; height: 23px; display: grid; place-items: center; color: $muted; font-size: 9px; }
+.calendar-day.today .calendar-number { border-radius: 50%; background: $pink; color: white; font-weight: 800; }
+.calendar-events { display: grid; gap: 3px; margin-top: 3px; }
+.calendar-event { width: 100%; overflow: hidden; display: block; padding: 4px 5px; border: 0; border-radius: 5px; color: $dark-brown; font-size: 7px; line-height: 1.25; text-align: left; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.calendar-event.project { background: $blush; }
+.calendar-event.task { background: color.mix($cream, #d9b77b, 70%); }
+.calendar-event.unavailable { display: flex; align-items: center; gap: 3px; background: color.mix($cream, $dark-brown, 82%); color: $dark-brown; cursor: default; }
+.calendar-event.completed { opacity: .55; text-decoration: line-through; }
+.calendar-events small { color: $muted; font-size: 7px; }
+.planning-sidebar { display: grid; gap: 17px; }
+.upcoming-panel, .tasks-panel, .unavailable-panel { padding: 19px; }
+.upcoming-panel h3, .tasks-heading h3 { margin: 5px 0 0; color: $dark-brown; font-family: Georgia, serif; font-size: 18px; font-weight: 500; }
+.upcoming-panel > p, .tasks-panel > p { margin: 15px 0 0; color: $muted; font-size: 10px; }
+.upcoming-list, .task-list { display: grid; gap: 8px; margin-top: 15px; }
+.upcoming-list > div { display: grid; grid-template-columns: 43px minmax(0, 1fr); align-items: center; gap: 10px; padding: 9px; border-radius: 10px; background: $cream; }
+.upcoming-list time { color: $pink; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.upcoming-list span, .task-row > span { display: grid; gap: 3px; min-width: 0; }
+.upcoming-list strong, .task-row strong { overflow: hidden; color: $dark-brown; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.upcoming-list small, .task-row small { color: $muted; font-size: 8px; }
+.upcoming-list .late { border: 1px solid rgba($pink, .45); }
+.tasks-heading { display: flex; align-items: flex-end; justify-content: space-between; }
+.tasks-heading > strong { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; background: $blush; color: $dark-brown; font-size: 9px; }
+.task-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 25px; align-items: center; gap: 8px; padding: 9px; border-radius: 10px; background: $cream; }
+.task-row.completed > span { opacity: .55; text-decoration: line-through; }
+.task-check { width: 21px; height: 21px; display: grid; place-items: center; border: 1px solid $blush; border-radius: 6px; background: $paper; color: $brown; font-size: 9px; cursor: pointer; }
+.task-delete { border: 0; background: transparent; color: color.mix($pink, $dark-brown, 58%); cursor: pointer; }
+.priority-text { font-weight: 800; }
+.priority-alta { color: #ad625f; }
+.priority-média { color: #a27b3f; }
+.priority-baixa { color: #568264; }
+.unavailable-list { display: grid; gap: 7px; margin-top: 15px; }
+.unavailable-list > div { display: grid; grid-template-columns: 70px minmax(0, 1fr) 25px; align-items: center; gap: 8px; padding: 9px; border-radius: 10px; background: $cream; }
+.unavailable-list time { color: $brown; font-size: 9px; font-weight: 800; }
+.unavailable-list span { overflow: hidden; color: $muted; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.unavailable-list button { border: 0; background: transparent; color: color.mix($pink, $dark-brown, 58%); cursor: pointer; }
 .materials-summary span { display: block; color: $muted; font-size: 10px; }
 .materials-summary strong { display: block; margin-top: 8px; color: $dark-brown; font-family: Georgia, serif; font-size: 22px; font-weight: 500; }
 .material-card { padding: 20px; border: 1px solid $line; border-radius: 17px; background: rgba($paper, .94); box-shadow: 0 9px 25px rgba($dark-brown, .06); }
@@ -481,6 +532,9 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 }
 
 @media (max-width: 560px) {
+  .calendar-day { min-height: 66px; padding: 4px; }
+  .calendar-event { width: 7px; height: 7px; padding: 0; border-radius: 50%; color: transparent; }
+  .calendar-heading { align-items: flex-start; flex-direction: column; }
   .modal-backdrop { padding: 12px; }
   .idea-modal { padding: 21px; }
   .idea-detail { padding: 0 21px 21px; }
@@ -491,6 +545,7 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 }
 
 @media (max-width: 780px) {
+  .planning-layout { grid-template-columns: 1fr; }
   .app-shell { grid-template-columns: 76px minmax(0, 1fr); }
   .sidebar { padding-inline: 10px; }
   .brand { justify-content: center; padding-inline: 0; > div:last-child { display: none; } }
