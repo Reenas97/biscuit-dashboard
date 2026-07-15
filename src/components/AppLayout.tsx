@@ -20,7 +20,7 @@ export function AppLayout() {
     <div className="app-shell">
       <Sidebar />
       <main>
-        <Topbar title={titles[pathname] ?? 'Reena Studio'} />
+        <Topbar title={titles[pathname] ?? 'Reena Biscuit'} />
         <section className="page-content">
           <Outlet />
         </section>
