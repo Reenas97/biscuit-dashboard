@@ -13,6 +13,7 @@ import {
 import type { DragEndEvent } from '@dnd-kit/core'
 import {
   FaArrowRight,
+  FaBoxesStacked,
   FaCalendarDays,
   FaClipboardList,
   FaGripVertical,
@@ -41,17 +42,45 @@ type Project = {
   status: ProjectStatus
   sourceIdeaId: string
   createdAt: string
+  materials?: ProjectMaterial[]
+}
+
+type ProjectMaterial = {
+  id: string
+  materialId: string
+  name: string
+  unit: string
+  quantity: number
+  unitCost: number
+}
+
+type Material = {
+  id: string
+  name: string
+  unit: string
+  stock: number
+  unitCost: number
+  minimumStock: number
+  category: string
+  createdAt: string
 }
 
 type ProjectForm = Omit<Project, 'id' | 'sourceIdeaId' | 'createdAt' | 'tags'> & { tags: string }
 
 const projectStorageKey = 'reena-biscuit-projects'
+const materialStorageKey = 'reena-biscuit-materials'
 const emptyProjectForm: ProjectForm = { title: '', description: '', category: '', tags: '', type: 'Pessoal', client: '', deadline: '', referenceLink: '', status: 'Planejamento' }
 
 function loadProjects() {
   const saved = localStorage.getItem(projectStorageKey)
   if (!saved) return []
   try { return JSON.parse(saved) as Project[] } catch { return [] }
+}
+
+function loadMaterials() {
+  const saved = localStorage.getItem(materialStorageKey)
+  if (!saved) return []
+  try { return JSON.parse(saved) as Material[] } catch { return [] }
 }
 
 function KanbanCard({ project, onOpen }: { project: Project; onOpen: (id: string) => void }) {
@@ -96,6 +125,10 @@ export function ProjectsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<ProjectForm | null>(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [materials, setMaterials] = useState<Material[]>(loadMaterials)
+  const [materialId, setMaterialId] = useState('')
+  const [materialQuantity, setMaterialQuantity] = useState('')
+  const [materialError, setMaterialError] = useState('')
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -105,6 +138,38 @@ export function ProjectsPage() {
   function saveProjects(nextProjects: Project[]) {
     setProjects(nextProjects)
     localStorage.setItem(projectStorageKey, JSON.stringify(nextProjects))
+  }
+
+  function saveMaterials(nextMaterials: Material[]) {
+    setMaterials(nextMaterials)
+    localStorage.setItem(materialStorageKey, JSON.stringify(nextMaterials))
+  }
+
+  function addMaterialToProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedProject) return
+    const material = materials.find((item) => item.id === materialId)
+    const quantity = Number(materialQuantity)
+    if (!material || !Number.isFinite(quantity) || quantity <= 0) {
+      setMaterialError('Escolha um material e informe uma quantidade válida.')
+      return
+    }
+    if (quantity > material.stock) {
+      setMaterialError(`Há apenas ${material.stock.toLocaleString('pt-BR')} ${material.unit} em estoque.`)
+      return
+    }
+    const usage: ProjectMaterial = { id: crypto.randomUUID(), materialId: material.id, name: material.name, unit: material.unit, quantity, unitCost: material.unitCost }
+    saveProjects(projects.map((project) => project.id === selectedProject.id ? { ...project, materials: [...(project.materials ?? []), usage] } : project))
+    saveMaterials(materials.map((item) => item.id === material.id ? { ...item, stock: item.stock - quantity } : item))
+    setMaterialId('')
+    setMaterialQuantity('')
+    setMaterialError('')
+  }
+
+  function removeMaterialFromProject(usage: ProjectMaterial) {
+    if (!selectedProject) return
+    saveProjects(projects.map((project) => project.id === selectedProject.id ? { ...project, materials: (project.materials ?? []).filter((item) => item.id !== usage.id) } : project))
+    saveMaterials(materials.map((material) => material.id === usage.materialId ? { ...material, stock: material.stock + usage.quantity } : material))
   }
 
   function deleteProject(id: string) {
@@ -202,6 +267,25 @@ export function ProjectsPage() {
             </div>
             {selectedProject.tags.length > 0 && <div className="idea-tags detail-tags"><FaTag />{selectedProject.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>}
             {selectedProject.referenceLink && <a className="reference-link project-reference" href={selectedProject.referenceLink} target="_blank" rel="noreferrer"><FaLink /> Abrir referência do projeto</a>}
+            <section className="project-materials">
+              <div className="project-materials-heading">
+                <div><span className="section-kicker"><FaBoxesStacked /> MATERIAIS UTILIZADOS</span><h3>Consumo da encomenda</h3></div>
+                <strong>{(selectedProject.materials ?? []).reduce((total, item) => total + item.quantity * item.unitCost, 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>
+              </div>
+              {(selectedProject.materials ?? []).length > 0 ? (
+                <div className="project-material-list">
+                  {(selectedProject.materials ?? []).map((item) => <div key={item.id}><span><strong>{item.name}</strong><small>{item.quantity.toLocaleString('pt-BR')} {item.unit} × {item.unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</small></span><b>{(item.quantity * item.unitCost).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</b><button onClick={() => removeMaterialFromProject(item)} type="button" aria-label={`Remover ${item.name}`}><FaTrash /></button></div>)}
+                </div>
+              ) : <p className="project-material-empty">Nenhum material lançado neste projeto.</p>}
+              {materials.length > 0 ? (
+                <form className="project-material-form" onSubmit={addMaterialToProject}>
+                  <label className="form-field">Material<select required value={materialId} onChange={(event) => { setMaterialId(event.target.value); setMaterialError('') }}><option value="">Selecione...</option>{materials.map((material) => <option key={material.id} value={material.id}>{material.name} · {material.stock.toLocaleString('pt-BR')} {material.unit}</option>)}</select></label>
+                  <label className="form-field">Quantidade<input required min="0.01" step="0.01" type="number" value={materialQuantity} onChange={(event) => { setMaterialQuantity(event.target.value); setMaterialError('') }} /></label>
+                  <button className="secondary-button" type="submit"><FaPlus /> Adicionar</button>
+                  {materialError && <p className="project-material-error">{materialError}</p>}
+                </form>
+              ) : <p className="project-material-empty">Cadastre materiais na página de Materiais para poder lançá-los aqui.</p>}
+            </section>
             <div className="modal-actions detail-actions">
               <button className="secondary-button danger-button" onClick={() => deleteProject(selectedProject.id)} type="button"><FaTrash /> Excluir</button>
               <button className="primary-button" onClick={() => openEdit(selectedProject)} type="button"><FaPen /> Editar projeto</button>
