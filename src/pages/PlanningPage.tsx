@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { FaArrowLeft, FaArrowRight, FaBan, FaCalendarDay, FaCheck, FaCircleExclamation, FaClipboardCheck, FaPlus, FaTrash, FaXmark } from 'react-icons/fa6'
+import { ConfirmButton } from '../components/ConfirmButton'
+import { saveLocalData } from '../lib/cloudData'
 
 type StoredProject = { id: string; title: string; deadline: string; status: string; client?: string }
 type TaskPriority = 'Baixa' | 'Média' | 'Alta'
@@ -51,8 +53,8 @@ export function PlanningPage() {
     return [...projectEvents, ...taskEvents, ...unavailableEvents].filter((item) => item.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 6)
   }, [projects, tasks, unavailableDays, today])
 
-  function saveTasks(nextTasks: Task[]) { setTasks(nextTasks); localStorage.setItem(taskStorageKey, JSON.stringify(nextTasks)) }
-  function saveUnavailableDays(nextDays: UnavailableDay[]) { setUnavailableDays(nextDays); localStorage.setItem(unavailableStorageKey, JSON.stringify(nextDays)) }
+  function saveTasks(nextTasks: Task[]) { setTasks(nextTasks); saveLocalData(taskStorageKey, JSON.stringify(nextTasks)) }
+  function saveUnavailableDays(nextDays: UnavailableDay[]) { setUnavailableDays(nextDays); saveLocalData(unavailableStorageKey, JSON.stringify(nextDays)) }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!form) return
@@ -98,9 +100,9 @@ export function PlanningPage() {
       <aside className="planning-sidebar">
         <section className="upcoming-panel"><span className="section-kicker"><FaCircleExclamation /> PRÓXIMOS COMPROMISSOS</span><h3>O que vem por aí</h3>{upcoming.length > 0 ? <div className="upcoming-list">{upcoming.map((item) => <div className={item.date < today ? 'late' : ''} key={item.id}><time>{parseDate(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</time><span><strong>{item.title}</strong><small>{item.kind === 'project' ? 'Entrega de projeto' : item.kind === 'task' ? 'Tarefa do ateliê' : 'Dia indisponível'}</small></span></div>)}</div> : <p>Nenhum compromisso próximo.</p>}</section>
         <section className="tasks-panel"><div className="tasks-heading"><div><span className="section-kicker"><FaClipboardCheck /> TAREFAS</span><h3>Lista do ateliê</h3></div><strong>{tasks.filter((task) => !task.completed).length}</strong></div>
-          {tasks.length > 0 ? <div className="task-list">{tasks.map((task) => <div className={task.completed ? 'task-row completed' : 'task-row'} key={task.id}><button className="task-check" onClick={() => saveTasks(tasks.map((item) => item.id === task.id ? { ...item, completed: !item.completed } : item))} type="button" aria-label={`${task.completed ? 'Reabrir' : 'Concluir'} ${task.title}`}>{task.completed && <FaCheck />}</button><span><strong>{task.title}</strong><small>{parseDate(task.date).toLocaleDateString('pt-BR')} · <b className={`priority-text priority-${task.priority.toLocaleLowerCase('pt-BR')}`}>{task.priority}</b></small></span><button className="task-delete" onClick={() => saveTasks(tasks.filter((item) => item.id !== task.id))} type="button" aria-label={`Excluir ${task.title}`}><FaTrash /></button></div>)}</div> : <p>Nenhuma tarefa cadastrada.</p>}
+          {tasks.length > 0 ? <div className="task-list">{tasks.map((task) => <div className={task.completed ? 'task-row completed' : 'task-row'} key={task.id}><button className="task-check" onClick={() => saveTasks(tasks.map((item) => item.id === task.id ? { ...item, completed: !item.completed } : item))} type="button" aria-label={`${task.completed ? 'Reabrir' : 'Concluir'} ${task.title}`}>{task.completed && <FaCheck />}</button><span><strong>{task.title}</strong><small>{parseDate(task.date).toLocaleDateString('pt-BR')} · <b className={`priority-text priority-${task.priority.toLocaleLowerCase('pt-BR')}`}>{task.priority}</b></small></span><ConfirmButton className="task-delete" title="Excluir tarefa?" message={`A tarefa “${task.title}” será removida do planejamento.`} ariaLabel={`Excluir ${task.title}`} onConfirm={() => saveTasks(tasks.filter((item) => item.id !== task.id))}><FaTrash /></ConfirmButton></div>)}</div> : <p>Nenhuma tarefa cadastrada.</p>}
         </section>
-        {unavailableDays.length > 0 && <section className="unavailable-panel"><div className="tasks-heading"><div><span className="section-kicker"><FaBan /> INDISPONIBILIDADE</span><h3>Dias bloqueados</h3></div><strong>{unavailableDays.length}</strong></div><div className="unavailable-list">{[...unavailableDays].sort((a, b) => a.date.localeCompare(b.date)).map((item) => <div key={item.id}><time>{parseDate(item.date).toLocaleDateString('pt-BR')}</time><span>{item.reason}</span><button onClick={() => saveUnavailableDays(unavailableDays.filter((day) => day.id !== item.id))} type="button" aria-label={`Remover indisponibilidade de ${item.date}`}><FaTrash /></button></div>)}</div></section>}
+        {unavailableDays.length > 0 && <section className="unavailable-panel"><div className="tasks-heading"><div><span className="section-kicker"><FaBan /> INDISPONIBILIDADE</span><h3>Dias bloqueados</h3></div><strong>{unavailableDays.length}</strong></div><div className="unavailable-list">{[...unavailableDays].sort((a, b) => a.date.localeCompare(b.date)).map((item) => <div key={item.id}><time>{parseDate(item.date).toLocaleDateString('pt-BR')}</time><span>{item.reason}</span><ConfirmButton title="Remover dia indisponível?" message={`O dia ${parseDate(item.date).toLocaleDateString('pt-BR')} voltará a ficar disponível.`} ariaLabel={`Remover indisponibilidade de ${item.date}`} onConfirm={() => saveUnavailableDays(unavailableDays.filter((day) => day.id !== item.id))}><FaTrash /></ConfirmButton></div>)}</div></section>}
       </aside>
     </div>
 

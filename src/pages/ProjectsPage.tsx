@@ -11,6 +11,8 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
+import { ConfirmButton } from '../components/ConfirmButton'
+import { saveLocalData } from '../lib/cloudData'
 import {
   FaArrowRight,
   FaBoxesStacked,
@@ -147,12 +149,12 @@ export function ProjectsPage() {
 
   function saveProjects(nextProjects: Project[]) {
     setProjects(nextProjects)
-    localStorage.setItem(projectStorageKey, JSON.stringify(nextProjects))
+    saveLocalData(projectStorageKey, JSON.stringify(nextProjects))
   }
 
   function saveMaterials(nextMaterials: Material[]) {
     setMaterials(nextMaterials)
-    localStorage.setItem(materialStorageKey, JSON.stringify(nextMaterials))
+    saveLocalData(materialStorageKey, JSON.stringify(nextMaterials))
   }
 
   function addMaterialToProject(event: FormEvent<HTMLFormElement>) {
@@ -183,6 +185,13 @@ export function ProjectsPage() {
   }
 
   function deleteProject(id: string) {
+    const project = projects.find((item) => item.id === id)
+    if (project?.materials?.length) {
+      saveMaterials(materials.map((material) => {
+        const returned = project.materials?.filter((item) => item.materialId === material.id).reduce((sum, item) => sum + item.quantity, 0) ?? 0
+        return returned ? { ...material, stock: material.stock + returned } : material
+      }))
+    }
     saveProjects(projects.filter((project) => project.id !== id))
     setSelectedId(null)
   }
@@ -297,7 +306,7 @@ export function ProjectsPage() {
               ) : <p className="project-material-empty">Cadastre materiais na página de Materiais para poder lançá-los aqui.</p>}
             </section>
             <div className="modal-actions detail-actions">
-              <button className="secondary-button danger-button" onClick={() => deleteProject(selectedProject.id)} type="button"><FaTrash /> Excluir</button>
+              <ConfirmButton className="secondary-button danger-button" title="Excluir projeto?" message="O projeto será removido e os materiais lançados nele voltarão automaticamente ao estoque." onConfirm={() => deleteProject(selectedProject.id)}><FaTrash /> Excluir</ConfirmButton>
               <button className="primary-button" onClick={() => openEdit(selectedProject)} type="button"><FaPen /> Editar projeto</button>
             </div>
           </section>

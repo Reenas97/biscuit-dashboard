@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
+import { CloudSync } from './CloudSync'
 
 const titles: Record<string, string> = {
   '/': 'Dashboard',
@@ -18,6 +19,7 @@ export function AppLayout() {
 
   return (
     <div className="app-shell">
+      <CloudSync />
       <Sidebar />
       <main>
         <Topbar title={titles[pathname] ?? 'Reena Biscuit'} />

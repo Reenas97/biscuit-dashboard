@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { FaInstagram, FaMagnifyingGlass, FaPen, FaPlus, FaTrash, FaUser, FaUsers, FaWhatsapp, FaXmark } from 'react-icons/fa6'
+import { ConfirmButton } from '../components/ConfirmButton'
+import { saveLocalData } from '../lib/cloudData'
 
 type Client = { id: string; name: string; phone: string; instagram: string; email: string; notes: string; createdAt: string }
 type StoredProject = { id: string; client?: string; type?: string }
@@ -31,7 +33,7 @@ export function ClientsPage() {
     return clients.filter((client) => [client.name, client.phone, client.instagram, client.email].some((value) => value.toLocaleLowerCase('pt-BR').includes(term)))
   }, [clients, query])
 
-  function saveClients(nextClients: Client[]) { setClients(nextClients); localStorage.setItem(clientStorageKey, JSON.stringify(nextClients)) }
+  function saveClients(nextClients: Client[]) { setClients(nextClients); saveLocalData(clientStorageKey, JSON.stringify(nextClients)) }
   function openNew() { setEditingId(null); setForm(emptyForm) }
   function openEdit(client: Client) { setEditingId(client.id); setForm({ name: client.name, phone: client.phone, instagram: client.instagram, email: client.email, notes: client.notes }) }
   function closeForm() { setEditingId(null); setForm(null) }
@@ -54,12 +56,12 @@ export function ClientsPage() {
     </div>
     <div className="clients-toolbar mt-7"><label><FaMagnifyingGlass /><input aria-label="Buscar clientes" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por nome, telefone ou Instagram" /></label><span>{filteredClients.length} {filteredClients.length === 1 ? 'cliente' : 'clientes'}</span></div>
     {filteredClients.length > 0 ? <div className="clients-grid mt-6">{filteredClients.map((client) => {
-      const orders = projectCount(client); const phone = onlyNumbers(client.phone)
+      const orders = projectCount(client); const phone = onlyNumbers(client.phone); const whatsappPhone = phone.startsWith('55') ? phone : `55${phone}`
       return <article className="client-card" key={client.id}>
         <div className="client-card-heading"><div className="client-avatar"><FaUser /></div><div><h3>{client.name}</h3><span>{orders} {orders === 1 ? 'encomenda' : 'encomendas'}</span></div></div>
         <div className="client-contact">{client.phone && <span>{client.phone}</span>}{client.instagram && <a href={`https://instagram.com/${client.instagram}`} target="_blank" rel="noreferrer"><FaInstagram /> @{client.instagram}</a>}{client.email && <a href={`mailto:${client.email}`}>{client.email}</a>}{!client.phone && !client.instagram && !client.email && <span>Nenhum contato informado</span>}</div>
         {client.notes && <p>{client.notes}</p>}
-        <div className="client-actions">{phone && <a className="client-whatsapp" href={`https://wa.me/55${phone}`} target="_blank" rel="noreferrer"><FaWhatsapp /> WhatsApp</a>}<button onClick={() => openEdit(client)} type="button"><FaPen /> Editar</button><button onClick={() => saveClients(clients.filter((item) => item.id !== client.id))} type="button" aria-label={`Excluir ${client.name}`}><FaTrash /></button></div>
+        <div className="client-actions">{phone && <a className="client-whatsapp" href={`https://wa.me/${whatsappPhone}`} target="_blank" rel="noreferrer"><FaWhatsapp /> WhatsApp</a>}<button onClick={() => openEdit(client)} type="button"><FaPen /> Editar</button><ConfirmButton title="Excluir cliente?" message={`O cadastro de “${client.name}” será removido. Os projetos existentes não serão apagados.`} ariaLabel={`Excluir ${client.name}`} onConfirm={() => saveClients(clients.filter((item) => item.id !== client.id))}><FaTrash /></ConfirmButton></div>
       </article>
     })}</div> : <div className="ideas-empty mt-7"><FaUsers /><h3>{query ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado'}</h3><p>{query ? 'Tente buscar por outro nome ou contato.' : 'Cadastre seu primeiro cliente para começar o histórico de encomendas.'}</p></div>}
     {form && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeForm() }}><section className="idea-modal" role="dialog" aria-modal="true" aria-labelledby="client-form-title">

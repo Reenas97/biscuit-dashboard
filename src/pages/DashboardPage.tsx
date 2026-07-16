@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FaArrowRight, FaBoxesStacked, FaBullseye, FaCalendarDays, FaCat, FaClipboardCheck, FaFolderPlus, FaPaw, FaPlus, FaTriangleExclamation, FaUserPlus } from 'react-icons/fa6'
+import { FaArrowRight, FaBoxesStacked, FaBullseye, FaCalendarDays, FaClipboardCheck, FaFolderPlus, FaPaw, FaPlus, FaTriangleExclamation, FaUserPlus } from 'react-icons/fa6'
+import { GiCat } from 'react-icons/gi'
+import { useAtelierSettings } from '../settings'
 
 type StoredIdea = { id: string }
 type StoredProject = { id: string; title: string; deadline: string; status: string; type: string; client?: string }
@@ -31,6 +33,7 @@ function displayGoalValue(value: number, unit: string) {
 }
 
 export function DashboardPage() {
+  const settings = useAtelierSettings()
   const [ideas] = useState(() => readStorage<StoredIdea>('reena-biscuit-ideas'))
   const [projects] = useState(() => readStorage<StoredProject>('reena-biscuit-projects'))
   const [clients] = useState(() => readStorage<StoredClient>('reena-biscuit-clients'))
@@ -50,7 +53,7 @@ export function DashboardPage() {
   const goalPercentage = currentGoal?.target > 0 ? Math.min(100, Math.round((currentGoal.current / currentGoal.target) * 100)) : 0
 
   return <>
-    <div className="welcome-card"><div><span className="eyebrow">{formatToday()}</span><h2>Bom dia, Renata <FaPaw className="greeting-paw" /></h2><p>{overdueProjects.length ? `${overdueProjects.length} ${overdueProjects.length === 1 ? 'entrega precisa' : 'entregas precisam'} da sua atenção.` : 'Um resumo do que precisa da sua atenção hoje.'}</p></div><div className="cat-scene"><FaPaw className="scene-paw scene-paw-one" /><FaPaw className="scene-paw scene-paw-two" /><FaCat className="decorative-cat" /></div></div>
+    <div className="welcome-card"><div><span className="eyebrow">{formatToday()}</span><h2>Bom dia, {settings.ownerName.split(/\s+/)[0] || 'Renata'} <FaPaw className="greeting-paw" /></h2><p>{overdueProjects.length ? `${overdueProjects.length} ${overdueProjects.length === 1 ? 'entrega precisa' : 'entregas precisam'} da sua atenção.` : 'Um resumo do que precisa da sua atenção hoje.'}</p></div><div className="cat-scene"><FaPaw className="scene-paw scene-paw-one" /><FaPaw className="scene-paw scene-paw-two" /><GiCat className="decorative-cat" /></div></div>
 
     <div className="summary-grid dashboard-summary mt-[18px]">
       <Link to="/projetos"><span>Projetos ativos</span><strong>{activeProjects.length}</strong><small>{overdueProjects.length ? `${overdueProjects.length} com prazo atrasado` : 'Produção em andamento'}</small></Link>

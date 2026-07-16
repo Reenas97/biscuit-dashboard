@@ -8,8 +8,11 @@ import {
   FaHouse,
   FaLightbulb,
   FaUsers,
+  FaRightFromBracket,
 } from 'react-icons/fa6'
 import logo from '../assets/reena-biscuit-logo.png'
+import { useAtelierSettings } from '../settings'
+import { useAuth } from '../auth/AuthContext'
 
 const sections = [
   { icon: FaHouse, label: 'Dashboard', path: '/' },
@@ -23,13 +26,16 @@ const sections = [
 ]
 
 export function Sidebar() {
+  const settings = useAtelierSettings()
+  const { logout } = useAuth()
+  const initials = settings.ownerName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'RS'
   return (
     <aside className="sidebar">
       <div className="brand">
-        <div className="brand-mark"><img src={logo} alt="Logo Reena Biscuit" /></div>
+        <div className="brand-mark"><img src={settings.logo || logo} alt={`Logo ${settings.studioName}`} /></div>
         <div>
-          <strong>Reena Biscuit</strong>
-          <span>Ateliê de biscuit</span>
+          <strong>{settings.studioName}</strong>
+          <span>{settings.subtitle}</span>
         </div>
       </div>
 
@@ -52,11 +58,12 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="avatar">RS</div>
+        <div className="avatar">{initials}</div>
         <div>
-          <strong>Renata</strong>
-          <span>Meu ateliê</span>
+          <strong>{settings.ownerName}</strong>
+          <span>{settings.city && settings.state ? `${settings.city} · ${settings.state}` : 'Meu ateliê'}</span>
         </div>
+        <button className="logout-button" onClick={logout} type="button" aria-label="Sair do Reena Biscuit"><FaRightFromBracket /></button>
       </div>
     </aside>
   )

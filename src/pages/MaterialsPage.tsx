@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { FaBoxOpen, FaBoxesStacked, FaPen, FaPlus, FaTrash, FaTriangleExclamation, FaXmark } from 'react-icons/fa6'
+import { ConfirmButton } from '../components/ConfirmButton'
+import { saveLocalData } from '../lib/cloudData'
 
 type Material = {
   id: string
@@ -32,12 +34,13 @@ export function MaterialsPage() {
   const [materials, setMaterials] = useState<Material[]>(loadMaterials)
   const [form, setForm] = useState<MaterialForm | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [notice, setNotice] = useState('')
   const lowStock = useMemo(() => materials.filter((material) => material.stock <= material.minimumStock), [materials])
   const totalValue = useMemo(() => materials.reduce((sum, material) => sum + material.stock * material.unitCost, 0), [materials])
 
   function saveMaterials(nextMaterials: Material[]) {
     setMaterials(nextMaterials)
-    localStorage.setItem(storageKey, JSON.stringify(nextMaterials))
+    saveLocalData(storageKey, JSON.stringify(nextMaterials))
   }
 
   function openNew() {
@@ -65,7 +68,11 @@ export function MaterialsPage() {
   }
 
   function deleteMaterial(id: string) {
+    const savedProjects = localStorage.getItem('reena-biscuit-projects')
+    const projects = (() => { try { return savedProjects ? JSON.parse(savedProjects) as { materials?: { materialId: string }[] }[] : [] } catch { return [] } })()
+    if (projects.some((project) => project.materials?.some((item) => item.materialId === id))) { setNotice('Esse material está sendo usado em um projeto. Remova o lançamento no projeto antes de excluí-lo.'); return }
     saveMaterials(materials.filter((material) => material.id !== id))
+    setNotice('Material excluído com sucesso.')
   }
 
   return (
@@ -84,6 +91,7 @@ export function MaterialsPage() {
         <article><span>Estoque baixo</span><strong>{lowStock.length}</strong></article>
         <article><span>Valor em estoque</span><strong>{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></article>
       </div>
+      {notice && <div className="settings-message">{notice}</div>}
 
       {materials.length > 0 ? (
         <div className="materials-grid mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
@@ -101,7 +109,7 @@ export function MaterialsPage() {
                   <div><span>Mínimo</span><strong>{material.minimumStock.toLocaleString('pt-BR')} {material.unit}</strong></div>
                   <div><span>Custo unitário</span><strong>{material.unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></div>
                 </div>
-                <div className="material-actions"><button onClick={() => openEdit(material)} type="button"><FaPen /> Editar</button><button onClick={() => deleteMaterial(material.id)} type="button"><FaTrash /> Excluir</button></div>
+                <div className="material-actions"><button onClick={() => openEdit(material)} type="button"><FaPen /> Editar</button><ConfirmButton title="Excluir material?" message={`O material “${material.name}” será removido do estoque.`} onConfirm={() => deleteMaterial(material.id)}><FaTrash /> Excluir</ConfirmButton></div>
               </article>
             )
           })}

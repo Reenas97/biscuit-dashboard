@@ -1,7 +1,4 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import {
-  FaGear,
-} from 'react-icons/fa6'
 import { AppLayout } from './components/AppLayout'
 import { DashboardPage } from './pages/DashboardPage'
 import { IdeasPage } from './pages/IdeasPage'
@@ -10,14 +7,15 @@ import { MaterialsPage } from './pages/MaterialsPage'
 import { ClientsPage } from './pages/ClientsPage'
 import { PlanningPage } from './pages/PlanningPage'
 import { GoalsPage } from './pages/GoalsPage'
-import { PlaceholderPage } from './pages/PlaceholderPage'
+import { SettingsPage } from './pages/SettingsPage'
+import { LoginPage } from './pages/LoginPage'
+import { useAuth } from './auth/AuthContext'
 import './App.scss'
 
-const placeholderPages = [
-  { path: 'configuracoes', title: 'Configurações', icon: FaGear, description: 'Personalize o Reena Biscuit para a sua rotina.' },
-]
-
 function App() {
+  const { user, loading } = useAuth()
+  if (loading) return <div className="auth-loading"><span /><p>Preparando seu ateliê...</p></div>
+  if (!user) return <LoginPage />
   return (
     <Routes>
       <Route element={<AppLayout />}>
@@ -28,13 +26,7 @@ function App() {
         <Route path="clientes" element={<ClientsPage />} />
         <Route path="planejamento" element={<PlanningPage />} />
         <Route path="metas" element={<GoalsPage />} />
-        {placeholderPages.map((page) => (
-          <Route
-            key={page.path}
-            path={page.path}
-            element={<PlaceholderPage {...page} />}
-          />
-        ))}
+        <Route path="configuracoes" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { FaBullseye, FaCheck, FaPen, FaPlus, FaTrash, FaXmark } from 'react-icons/fa6'
+import { ConfirmButton } from '../components/ConfirmButton'
+import { saveLocalData } from '../lib/cloudData'
 
 type GoalType = 'Faturamento' | 'Encomendas' | 'Produção' | 'Personalizada'
 type Goal = { id: string; title: string; type: GoalType; target: number; current: number; unit: string; deadline: string; createdAt: string }
@@ -33,7 +35,7 @@ export function GoalsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const completed = useMemo(() => goals.filter((goal) => goal.current >= goal.target), [goals])
 
-  function saveGoals(nextGoals: Goal[]) { setGoals(nextGoals); localStorage.setItem(storageKey, JSON.stringify(nextGoals)) }
+  function saveGoals(nextGoals: Goal[]) { setGoals(nextGoals); saveLocalData(storageKey, JSON.stringify(nextGoals)) }
   function openNew() { setEditingId(null); setForm(emptyForm) }
   function openEdit(goal: Goal) { setEditingId(goal.id); setForm({ title: goal.title, type: goal.type, target: String(goal.target), current: String(goal.current), unit: goal.unit, deadline: goal.deadline }) }
   function closeForm() { setEditingId(null); setForm(null) }
@@ -63,7 +65,7 @@ export function GoalsPage() {
         <div className="goal-progress-label"><span>{displayValue(goal.current, goal.unit)}</span><b>{percentage}%</b><span>{displayValue(goal.target, goal.unit)}</span></div>
         <div className="goal-progress"><span style={{ width: `${percentage}%` }} /></div>
         <div className="goal-deadline"><span>Prazo</span><strong>{goal.deadline ? new Date(`${goal.deadline}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : 'Sem prazo definido'}</strong></div>
-        <div className="goal-actions"><button onClick={() => openEdit(goal)} type="button"><FaPen /> Atualizar</button><button onClick={() => saveGoals(goals.filter((item) => item.id !== goal.id))} type="button" aria-label={`Excluir ${goal.title}`}><FaTrash /></button></div>
+        <div className="goal-actions"><button onClick={() => openEdit(goal)} type="button"><FaPen /> Atualizar</button><ConfirmButton title="Excluir meta?" message={`A meta “${goal.title}” e seu progresso serão removidos.`} ariaLabel={`Excluir ${goal.title}`} onConfirm={() => saveGoals(goals.filter((item) => item.id !== goal.id))}><FaTrash /></ConfirmButton></div>
       </article>
     })}</div> : <div className="ideas-empty mt-7"><FaBullseye /><h3>Nenhuma meta cadastrada</h3><p>Crie uma meta de faturamento, encomendas ou produção para acompanhar seu crescimento.</p></div>}
 

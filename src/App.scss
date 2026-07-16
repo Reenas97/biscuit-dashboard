@@ -12,6 +12,7 @@ $muted: #92796f;
 $line: color.mix($blush, $brown, 76%);
 
 button { color: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba($pink, .42); outline-offset: 2px; }
 
 .app-shell {
   min-height: 100vh;
@@ -101,6 +102,38 @@ button { color: inherit; }
   font-size: 11px;
   font-weight: 700;
 }
+.logout-button { width: 32px; height: 32px; display: grid; place-items: center; margin-left: auto; border: 0; border-radius: 9px; background: transparent; color: $muted; cursor: pointer; }
+.logout-button:hover { background: $cream; color: $dark-brown; }
+
+.auth-loading { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 13px; background: $cream; color: $muted; }
+.auth-loading span { width: 34px; height: 34px; border: 3px solid $blush; border-top-color: $brown; border-radius: 50%; animation: auth-spin .8s linear infinite; }
+.auth-loading p { margin: 0; font-size: 11px; }
+.cloud-status { position: fixed; z-index: 90; right: 18px; bottom: 18px; padding: 9px 12px; border: 1px solid $blush; border-radius: 10px; background: $paper; color: $brown; box-shadow: 0 8px 24px rgba($dark-brown, .12); font-size: 9px; }
+.cloud-status.error { border-color: rgba($pink, .7); color: $dark-brown; }
+@keyframes auth-spin { to { transform: rotate(360deg); } }
+
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background-image: linear-gradient(rgba($cream, .76), rgba($cream, .76)), url('./assets/paw-pattern.jpeg'); background-size: auto, 390px; }
+.login-page::before { display: none; }
+.login-card { width: min(430px, 100%); padding: 34px; border: 1px solid $blush; border-radius: 24px; background: rgba($paper, .97); box-shadow: 0 24px 65px rgba($dark-brown, .16); }
+.login-brand { text-align: center; }
+.login-brand > div { width: 88px; height: 88px; overflow: hidden; margin: 0 auto 13px; border-radius: 50%; background: $cream; }
+.login-brand img { width: 100%; height: 100%; object-fit: contain; }
+.login-brand > span { color: $pink; font-size: 9px; font-weight: 800; letter-spacing: .14em; }
+.login-brand h1 { margin: 7px 0 6px; font-size: 28px; }
+.login-brand p { margin: 0 0 24px; color: $muted; font-size: 11px; }
+.login-card form { display: grid; gap: 14px; }
+.login-field { display: grid; gap: 7px; }
+.login-field > span { display: flex; align-items: center; gap: 7px; color: $dark-brown; font-size: 11px; font-weight: 700; }
+.login-field input { width: 100%; height: 44px; padding: 0 13px; border: 1px solid $line; border-radius: 11px; background: white; color: $ink; outline: 0; }
+.login-field input:focus { border-color: $pink; box-shadow: 0 0 0 3px rgba($pink, .16); }
+.login-feedback { margin: 0; padding: 9px 11px; border-radius: 9px; background: rgba(#568264, .11); color: #568264; font-size: 9px; }
+.login-feedback.error { background: rgba($pink, .18); color: color.mix($pink, $dark-brown, 55%); }
+.login-submit { width: 100%; margin-top: 3px; }
+.login-submit:disabled { cursor: wait; opacity: .65; }
+.login-link { justify-self: center; border: 0; background: transparent; color: $brown; font-size: 9px; cursor: pointer; }
+.login-switch { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 22px; padding-top: 17px; border-top: 1px solid $line; color: $muted; font-size: 9px; }
+.login-switch svg { color: $pink; }
+.login-switch button { border: 0; background: transparent; color: $brown; font-size: 9px; font-weight: 800; cursor: pointer; }
 
 main {
   position: relative;
@@ -538,6 +571,40 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .goal-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 13px; border-top: 1px solid $line; }
 .goal-actions button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: $brown; font-size: 10px; cursor: pointer; }
 .goal-actions button:last-child { color: color.mix($pink, $dark-brown, 58%); }
+.settings-message { margin-top: 20px; padding: 12px 15px; border: 1px solid $blush; border-radius: 11px; background: rgba($paper, .9); color: $brown; font-size: 11px; }
+.settings-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(270px, .7fr); align-items: start; gap: 17px; }
+.settings-main, .settings-side { display: grid; gap: 15px; }
+.settings-card { padding: 21px; border: 1px solid $line; border-radius: 17px; background: rgba($paper, .95); box-shadow: 0 9px 25px rgba($dark-brown, .05); }
+.settings-card-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 19px; color: $pink; }
+.settings-card-heading > svg { width: 21px; height: 21px; }
+.settings-card-heading h3 { margin: 0; color: $dark-brown; font-family: Georgia, serif; font-size: 19px; font-weight: 500; }
+.settings-card-heading p { margin: 4px 0 0; color: $muted; font-size: 9px; line-height: 1.45; }
+.settings-card-heading.compact { align-items: flex-start; }
+.logo-setting { display: flex; align-items: center; gap: 18px; margin-bottom: 21px; padding: 15px; border-radius: 13px; background: $cream; }
+.logo-preview { width: 92px; height: 92px; overflow: hidden; flex: 0 0 92px; border: 1px solid $blush; border-radius: 50%; background: $paper; }
+.logo-preview img { width: 100%; height: 100%; display: block; object-fit: contain; }
+.logo-setting > div:last-child { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.logo-setting input, .settings-hidden-input { display: none; }
+.logo-setting label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.logo-setting button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: $brown; font-size: 9px; cursor: pointer; }
+.logo-setting small { width: 100%; color: $muted; font-size: 8px; }
+.logo-setting strong { width: 100%; color: color.mix($pink, $dark-brown, 55%); font-size: 9px; }
+.settings-save { justify-self: end; }
+.settings-wide-button { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 9px; }
+.danger-zone { border-color: rgba($pink, .6); }
+.danger-zone .settings-card-heading { color: color.mix($pink, $dark-brown, 60%); }
+.clear-confirm { display: grid; gap: 8px; padding: 12px; border-radius: 10px; background: $cream; }
+.clear-confirm strong { color: color.mix($pink, $dark-brown, 55%); font-size: 9px; }
+.clear-confirm button { min-height: 35px; border: 1px solid $line; border-radius: 9px; background: $paper; color: $brown; font-size: 9px; font-weight: 800; cursor: pointer; }
+.clear-confirm button:first-of-type { border-color: rgba($pink, .6); background: rgba($pink, .18); color: $dark-brown; }
+.confirm-backdrop { z-index: 80; }
+.confirm-dialog { position: relative; width: min(390px, 100%); padding: 26px; border: 1px solid $blush; border-radius: 19px; background: $paper; box-shadow: 0 25px 70px rgba($dark-brown, .25); text-align: center; }
+.confirm-close { position: absolute; top: 13px; right: 13px; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: $muted; cursor: pointer; }
+.confirm-icon { width: 45px; height: 45px; display: grid; place-items: center; margin: 0 auto 13px; border-radius: 50%; background: rgba($pink, .2); color: $dark-brown; }
+.confirm-dialog h2 { margin: 0; color: $dark-brown; font-family: Georgia, serif; font-size: 21px; font-weight: 500; }
+.confirm-dialog p { margin: 9px 0 20px; color: $muted; font-size: 11px; line-height: 1.55; }
+.confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.confirm-danger { min-height: 44px; border: 0; border-radius: 12px; background: color.mix($pink, $dark-brown, 62%); color: white; font-size: 11px; font-weight: 800; cursor: pointer; }
 .materials-summary span { display: block; color: $muted; font-size: 10px; }
 .materials-summary strong { display: block; margin-top: 8px; color: $dark-brown; font-family: Georgia, serif; font-size: 22px; font-weight: 500; }
 .material-card { padding: 20px; border: 1px solid $line; border-radius: 17px; background: rgba($paper, .94); box-shadow: 0 9px 25px rgba($dark-brown, .06); }
@@ -611,6 +678,9 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 }
 
 @media (max-width: 560px) {
+  .confirm-actions { grid-template-columns: 1fr; }
+  .logo-setting { align-items: flex-start; flex-direction: column; }
+  .settings-save { width: 100%; }
   .calendar-day { min-height: 66px; padding: 4px; }
   .calendar-event { width: 7px; height: 7px; padding: 0; border-radius: 50%; color: transparent; }
   .calendar-heading { align-items: flex-start; flex-direction: column; }
@@ -624,6 +694,7 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 }
 
 @media (max-width: 780px) {
+  .settings-layout { grid-template-columns: 1fr; }
   .dashboard-main-grid { grid-template-columns: 1fr; }
   .planning-layout { grid-template-columns: 1fr; }
   .app-shell { grid-template-columns: 76px minmax(0, 1fr); }

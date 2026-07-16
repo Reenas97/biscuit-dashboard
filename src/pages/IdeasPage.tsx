@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
+import { ConfirmButton } from '../components/ConfirmButton'
+import { saveLocalData } from '../lib/cloudData'
 import {
   FaArrowRight,
   FaHeart,
@@ -39,6 +41,7 @@ type IdeaForm = {
   tags: string
   link: string
 }
+type Client = { id: string; name: string }
 
 const initialIdeas: Idea[] = [
   { id: 'sample-1', title: 'Topo de bolo jardim encantado', description: 'Personagens delicados entre flores, cogumelos e pequenas luzes.', category: 'Topo de bolo', priority: 'Alta', tags: ['flores', 'aniversário'], link: '', favorite: false, tone: 'pink', createdAt: '2026-07-15T10:00:00.000Z', converted: false },
@@ -49,6 +52,7 @@ const initialIdeas: Idea[] = [
 const emptyForm: IdeaForm = { title: '', description: '', category: '', priority: 'Média', tags: '', link: '' }
 const storageKey = 'reena-biscuit-ideas'
 const projectStorageKey = 'reena-biscuit-projects'
+const clientStorageKey = 'reena-biscuit-clients'
 
 function loadIdeas() {
   const saved = localStorage.getItem(storageKey)
@@ -61,8 +65,15 @@ function loadIdeas() {
   }
 }
 
+function loadClients() {
+  const saved = localStorage.getItem(clientStorageKey)
+  if (!saved) return []
+  try { return JSON.parse(saved) as Client[] } catch { return [] }
+}
+
 export function IdeasPage() {
   const [ideas, setIdeas] = useState<Idea[]>(loadIdeas)
+  const [clients] = useState<Client[]>(loadClients)
   const [form, setForm] = useState<IdeaForm>(emptyForm)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -86,7 +97,7 @@ export function IdeasPage() {
 
   function saveIdeas(nextIdeas: Idea[]) {
     setIdeas(nextIdeas)
-    localStorage.setItem(storageKey, JSON.stringify(nextIdeas))
+    saveLocalData(storageKey, JSON.stringify(nextIdeas))
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -158,7 +169,7 @@ export function IdeasPage() {
     event.preventDefault()
     if (!convertingIdea) return
     const savedProjects = localStorage.getItem(projectStorageKey)
-    const projects = savedProjects ? JSON.parse(savedProjects) : []
+    const projects = (() => { try { return savedProjects ? JSON.parse(savedProjects) : [] } catch { return [] } })()
     const project = {
       id: crypto.randomUUID(),
       title: convertingIdea.title,
@@ -173,7 +184,7 @@ export function IdeasPage() {
       sourceIdeaId: convertingIdea.id,
       createdAt: new Date().toISOString(),
     }
-    localStorage.setItem(projectStorageKey, JSON.stringify([project, ...projects]))
+    saveLocalData(projectStorageKey, JSON.stringify([project, ...projects]))
     saveIdeas(projectForm.keepIdea ? ideas.map((idea) => idea.id === convertingIdea.id ? { ...idea, converted: true } : idea) : ideas.filter((idea) => idea.id !== convertingIdea.id))
     setConvertingIdeaId(null)
     setProjectForm({ type: 'Pessoal', client: '', deadline: '', keepIdea: true })
@@ -230,7 +241,7 @@ export function IdeasPage() {
                 <div className="idea-tags">{idea.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>
                 <div className="idea-card-actions">
                   <button className="idea-action" onClick={() => setSelectedIdeaId(idea.id)} type="button">Ver ideia <FaArrowRight /></button>
-                  <button className="delete-action" onClick={() => deleteIdea(idea.id)} type="button" aria-label={`Excluir ${idea.title}`}><FaTrash /></button>
+                  <ConfirmButton className="delete-action" title="Excluir ideia?" message={`A ideia “${idea.title}” será removida permanentemente.`} ariaLabel={`Excluir ${idea.title}`} onConfirm={() => deleteIdea(idea.id)}><FaTrash /></ConfirmButton>
                 </div>
               </div>
             </article>
@@ -259,7 +270,7 @@ export function IdeasPage() {
             {selectedIdea.tags.length > 0 && <div className="idea-tags detail-tags">{selectedIdea.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>}
             {selectedIdea.link && <a className="reference-link" href={selectedIdea.link} target="_blank" rel="noreferrer"><FaLink /> Abrir referência</a>}
             <div className="modal-actions detail-actions">
-              <button className="secondary-button danger-button" onClick={() => deleteIdea(selectedIdea.id)} type="button"><FaTrash /> Excluir</button>
+              <ConfirmButton className="secondary-button danger-button" title="Excluir ideia?" message={`A ideia “${selectedIdea.title}” será removida permanentemente.`} onConfirm={() => deleteIdea(selectedIdea.id)}><FaTrash /> Excluir</ConfirmButton>
               {!selectedIdea.converted && <button className="secondary-button" onClick={() => { setConvertingIdeaId(selectedIdea.id); setSelectedIdeaId(null) }} type="button"><FaWandMagicSparkles /> Converter</button>}
               <button className="primary-button" onClick={() => openEditIdea(selectedIdea)} type="button"><FaPen /> Editar ideia</button>
             </div>
@@ -280,7 +291,7 @@ export function IdeasPage() {
                 <label className="form-field">Tipo<select value={projectForm.type} onChange={(event) => setProjectForm({ ...projectForm, type: event.target.value as 'Pessoal' | 'Encomenda' })}><option>Pessoal</option><option>Encomenda</option></select></label>
                 <label className="form-field">Prazo<input type="date" value={projectForm.deadline} onChange={(event) => setProjectForm({ ...projectForm, deadline: event.target.value })} /></label>
               </div>
-              {projectForm.type === 'Encomenda' && <label className="form-field form-field--full">Cliente<input required value={projectForm.client} onChange={(event) => setProjectForm({ ...projectForm, client: event.target.value })} placeholder="Nome do cliente" /></label>}
+              {projectForm.type === 'Encomenda' && <label className="form-field form-field--full">Cliente<select required value={projectForm.client} onChange={(event) => setProjectForm({ ...projectForm, client: event.target.value })}><option value="">Selecione um cliente...</option>{clients.map((client) => <option key={client.id} value={client.name}>{client.name}</option>)}</select>{clients.length === 0 && <small>Nenhum cliente cadastrado. Cadastre um cliente antes de criar a encomenda.</small>}</label>}
               <label className="keep-idea"><input type="checkbox" checked={projectForm.keepIdea} onChange={(event) => setProjectForm({ ...projectForm, keepIdea: event.target.checked })} /><span><strong>Manter no banco de ideias</strong><small>A ideia ficará marcada como convertida.</small></span></label>
               <div className="modal-actions"><button className="secondary-button" onClick={() => setConvertingIdeaId(null)} type="button">Cancelar</button><button className="primary-button" type="submit"><FaWandMagicSparkles /> Criar projeto</button></div>
             </form>
