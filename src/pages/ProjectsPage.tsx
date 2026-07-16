@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   closestCorners,
@@ -18,6 +18,7 @@ import {
   FaBoxesStacked,
   FaCalendarDays,
   FaClipboardList,
+  FaClock,
   FaGripVertical,
   FaLink,
   FaPen,
@@ -68,12 +69,14 @@ type Material = {
 }
 
 type Client = { id: string; name: string }
+type TimeEntry = { id: string; projectId: string; startedAt: string; endedAt?: string }
 
 type ProjectForm = Omit<Project, 'id' | 'sourceIdeaId' | 'createdAt' | 'tags'> & { tags: string }
 
 const projectStorageKey = 'reena-biscuit-projects'
 const materialStorageKey = 'reena-biscuit-materials'
 const clientStorageKey = 'reena-biscuit-clients'
+const timeStorageKey = 'reena-biscuit-time-entries'
 const emptyProjectForm: ProjectForm = { title: '', description: '', category: '', tags: '', type: 'Pessoal', client: '', deadline: '', referenceLink: '', status: 'Planejamento' }
 
 function loadProjects() {
@@ -92,6 +95,18 @@ function loadClients() {
   const saved = localStorage.getItem(clientStorageKey)
   if (!saved) return []
   try { return JSON.parse(saved) as Client[] } catch { return [] }
+}
+
+function loadTimeEntries() {
+  const saved = localStorage.getItem(timeStorageKey)
+  if (!saved) return []
+  try { return JSON.parse(saved) as TimeEntry[] } catch { return [] }
+}
+
+function formatDuration(totalSeconds: number) {
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  return hours > 0 ? `${hours}h ${String(minutes).padStart(2, '0')}min` : `${minutes}min`
 }
 
 function KanbanCard({ project, onOpen }: { project: Project; onOpen: (id: string) => void }) {
@@ -138,10 +153,26 @@ export function ProjectsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [materials, setMaterials] = useState<Material[]>(loadMaterials)
   const [clients] = useState<Client[]>(loadClients)
+  const [timeEntries] = useState<TimeEntry[]>(loadTimeEntries)
+  const [now, setNow] = useState(() => Date.now())
   const [materialId, setMaterialId] = useState('')
   const [materialQuantity, setMaterialQuantity] = useState('')
   const [materialError, setMaterialError] = useState('')
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null
+  const selectedTimeEntries = selectedProject
+    ? timeEntries.filter((entry) => entry.projectId === selectedProject.id).sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+    : []
+  const selectedTimeSeconds = selectedTimeEntries.reduce((total, entry) => {
+    const end = entry.endedAt ? new Date(entry.endedAt).getTime() : now
+    return total + Math.max(0, Math.floor((end - new Date(entry.startedAt).getTime()) / 1000))
+  }, 0)
+  const hasActiveTimer = timeEntries.some((entry) => !entry.endedAt)
+
+  useEffect(() => {
+    if (!hasActiveTimer) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [hasActiveTimer])
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor),
@@ -286,6 +317,22 @@ export function ProjectsPage() {
             </div>
             {selectedProject.tags.length > 0 && <div className="idea-tags detail-tags"><FaTag />{selectedProject.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>}
             {selectedProject.referenceLink && <a className="reference-link project-reference" href={selectedProject.referenceLink} target="_blank" rel="noreferrer"><FaLink /> Abrir referência do projeto</a>}
+            <section className="project-time">
+              <div className="project-time-heading">
+                <div><span className="section-kicker"><FaClock /> TEMPO TRABALHADO</span><h3>Horas neste projeto</h3></div>
+                <strong>{formatDuration(selectedTimeSeconds)}</strong>
+              </div>
+              {selectedTimeEntries.length > 0 ? (
+                <div className="project-time-list">
+                  {selectedTimeEntries.map((entry) => {
+                    const start = new Date(entry.startedAt)
+                    const end = entry.endedAt ? new Date(entry.endedAt) : null
+                    const seconds = Math.max(0, Math.floor(((end?.getTime() ?? now) - start.getTime()) / 1000))
+                    return <div key={entry.id}><span><strong>{start.toLocaleDateString('pt-BR')}</strong><small>{start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — {end ? end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'em andamento'}</small></span><b>{formatDuration(seconds)}</b></div>
+                  })}
+                </div>
+              ) : <p className="project-material-empty">Nenhum tempo registrado. Inicie o cronômetro pelo Dashboard.</p>}
+            </section>
             <section className="project-materials">
               <div className="project-materials-heading">
                 <div><span className="section-kicker"><FaBoxesStacked /> MATERIAIS UTILIZADOS</span><h3>Consumo da encomenda</h3></div>

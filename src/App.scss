@@ -649,6 +649,16 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .project-detail-grid strong { color: $dark-brown; font-size: 12px; }
 .project-detail .detail-tags { align-items: center; }
 .project-reference { margin: 2px 0 18px; }
+.project-time { margin-top: 20px; padding: 18px; border: 1px solid $line; border-radius: 14px; background: rgba($blush, .34); }
+.project-time-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.project-time-heading h3 { margin: 5px 0 0; color: $dark-brown; font-family: Georgia, serif; font-size: 18px; font-weight: 500; }
+.project-time-heading > strong { color: $brown; font-family: Georgia, serif; font-size: 20px; font-weight: 500; white-space: nowrap; }
+.project-time-list { display: grid; gap: 7px; max-height: 190px; margin-top: 15px; overflow-y: auto; }
+.project-time-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 11px; border-radius: 10px; background: rgba($paper, .88); }
+.project-time-list span { display: grid; gap: 2px; }
+.project-time-list span strong { color: $dark-brown; font-size: 11px; }
+.project-time-list span small { color: $muted; font-size: 9px; }
+.project-time-list b { color: $dark-brown; font-size: 11px; white-space: nowrap; }
 .project-materials { margin-top: 20px; padding: 18px; border: 1px solid $line; border-radius: 14px; background: rgba($cream, .68); }
 .project-materials-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .project-materials-heading h3 { margin: 5px 0 0; color: $dark-brown; font-family: Georgia, serif; font-size: 18px; font-weight: 500; }
