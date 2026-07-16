@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build --minify=esbuild",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "telegram:test": "node scripts/send-telegram-reminders.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -29,6 +30,7 @@
     "eslint": "^10.6.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
+    "firebase-admin": "^14.2.0",
     "firebase-tools": "^15.24.0",
     "globals": "^17.7.0",
     "sass": "^1.101.0",
