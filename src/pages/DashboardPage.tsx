@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FaArrowRight, FaBoxesStacked, FaBullseye, FaCalendarDays, FaClipboardCheck, FaFolderPlus, FaPaw, FaPlus, FaTriangleExclamation, FaUserPlus } from 'react-icons/fa6'
+import { FaArrowRight, FaBoxesStacked, FaBullseye, FaCalendarDays, FaClock, FaClipboardCheck, FaFolderPlus, FaPause, FaPaw, FaPlay, FaPlus, FaTriangleExclamation, FaUserPlus } from 'react-icons/fa6'
 import { GiCat } from 'react-icons/gi'
 import { useAtelierSettings } from '../settings'
+import { saveLocalData } from '../lib/cloudData'
 
 type StoredIdea = { id: string }
 type StoredProject = { id: string; title: string; deadline: string; status: string; type: string; client?: string }
@@ -11,6 +12,9 @@ type StoredTask = { id: string; title: string; date: string; completed: boolean;
 type StoredMaterial = { id: string; name: string; stock: number; minimumStock: number; unit: string }
 type StoredGoal = { id: string; title: string; target: number; current: number; unit: string; deadline: string }
 type StoredUnavailable = { id: string; date: string; reason: string }
+type TimeEntry = { id: string; projectId: string; startedAt: string; endedAt?: string }
+
+const timeStorageKey = 'reena-biscuit-time-entries'
 
 function readStorage<T>(key: string): T[] {
   const saved = localStorage.getItem(key)
@@ -32,6 +36,13 @@ function displayGoalValue(value: number, unit: string) {
   return `${value.toLocaleString('pt-BR')} ${unit}`.trim()
 }
 
+function formatDuration(totalSeconds: number) {
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return hours > 0 ? `${hours}h ${String(minutes).padStart(2, '0')}min` : `${minutes}min ${String(seconds).padStart(2, '0')}s`
+}
+
 export function DashboardPage() {
   const settings = useAtelierSettings()
   const [ideas] = useState(() => readStorage<StoredIdea>('reena-biscuit-ideas'))
@@ -41,6 +52,9 @@ export function DashboardPage() {
   const [materials] = useState(() => readStorage<StoredMaterial>('reena-biscuit-materials'))
   const [goals] = useState(() => readStorage<StoredGoal>('reena-biscuit-goals'))
   const [unavailable] = useState(() => readStorage<StoredUnavailable>('reena-biscuit-unavailable-days'))
+  const [timeEntries, setTimeEntries] = useState(() => readStorage<TimeEntry>(timeStorageKey))
+  const [selectedProjectId, setSelectedProjectId] = useState('')
+  const [now, setNow] = useState(() => Date.now())
   const today = dateKey(new Date())
   const activeProjects = projects.filter((project) => project.status !== 'Entregue')
   const datedProjects = activeProjects.filter((project) => project.deadline).sort((a, b) => a.deadline.localeCompare(b.deadline))
@@ -51,6 +65,39 @@ export function DashboardPage() {
   const nextUnavailable = unavailable.filter((item) => item.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0]
   const currentGoal = goals.find((goal) => goal.current < goal.target) ?? goals[0]
   const goalPercentage = currentGoal?.target > 0 ? Math.min(100, Math.round((currentGoal.current / currentGoal.target) * 100)) : 0
+  const activeEntry = timeEntries.find((entry) => !entry.endedAt)
+  const activeProject = projects.find((project) => project.id === activeEntry?.projectId)
+
+  useEffect(() => {
+    if (!activeEntry) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [activeEntry])
+
+  function saveTimeEntries(entries: TimeEntry[]) {
+    setTimeEntries(entries)
+    saveLocalData(timeStorageKey, JSON.stringify(entries))
+  }
+
+  function startTimer() {
+    if (!selectedProjectId || activeEntry) return
+    saveTimeEntries([{ id: crypto.randomUUID(), projectId: selectedProjectId, startedAt: new Date().toISOString() }, ...timeEntries])
+    setNow(Date.now())
+  }
+
+  function stopTimer() {
+    if (!activeEntry) return
+    saveTimeEntries(timeEntries.map((entry) => entry.id === activeEntry.id ? { ...entry, endedAt: new Date().toISOString() } : entry))
+  }
+
+  function projectSeconds(projectId: string) {
+    return timeEntries.filter((entry) => entry.projectId === projectId).reduce((total, entry) => {
+      const end = entry.endedAt ? new Date(entry.endedAt).getTime() : now
+      return total + Math.max(0, Math.floor((end - new Date(entry.startedAt).getTime()) / 1000))
+    }, 0)
+  }
+
+  const projectsWithTime = projects.map((project) => ({ project, seconds: projectSeconds(project.id) })).filter((item) => item.seconds > 0).sort((a, b) => b.seconds - a.seconds)
 
   return <>
     <div className="welcome-card"><div><span className="eyebrow">{formatToday()}</span><h2>Bom dia, {settings.ownerName.split(/\s+/)[0] || 'Renata'} <FaPaw className="greeting-paw" /></h2><p>{overdueProjects.length ? `${overdueProjects.length} ${overdueProjects.length === 1 ? 'entrega precisa' : 'entregas precisam'} da sua atenção.` : 'Um resumo do que precisa da sua atenção hoje.'}</p></div><div className="cat-scene"><FaPaw className="scene-paw scene-paw-one" /><FaPaw className="scene-paw scene-paw-two" /><GiCat className="decorative-cat" /></div></div>
@@ -61,6 +108,11 @@ export function DashboardPage() {
       <Link to="/planejamento"><span>Tarefas pendentes</span><strong>{pendingTasks.length}</strong><small>{pendingTasks.length ? 'Itens no planejamento' : 'Tudo em dia por aqui'}</small></Link>
       <Link to="/materiais"><span>Estoque baixo</span><strong>{lowStock.length}</strong><small>{lowStock.length ? 'Materiais para repor' : 'Estoque saudável'}</small></Link>
     </div>
+
+    <section className="dashboard-timer mt-[18px]">
+      <div className="dashboard-timer-heading"><div><span className="section-kicker"><FaClock /> TRABALHANDO AGORA</span><h3>{activeProject ? activeProject.title : 'Cronômetro de produção'}</h3><p>{activeEntry ? `Tempo desta sessão: ${formatDuration(Math.max(0, Math.floor((now - new Date(activeEntry.startedAt).getTime()) / 1000)))}` : 'Escolha um projeto para contabilizar o tempo de trabalho.'}</p></div>{activeEntry ? <button className="timer-stop" onClick={stopTimer} type="button"><FaPause /> Pausar</button> : <div className="timer-start"><select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} aria-label="Projeto em produção"><option value="">Selecione um projeto...</option>{activeProjects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select><button disabled={!selectedProjectId} onClick={startTimer} type="button"><FaPlay /> Iniciar</button></div>}</div>
+      {projectsWithTime.length > 0 && <div className="dashboard-time-totals">{projectsWithTime.slice(0, 4).map(({ project, seconds }) => <div key={project.id}><span>{project.title}</span><strong>{formatDuration(seconds)}</strong></div>)}</div>}
+    </section>
 
     <div className="dashboard-main-grid mt-[18px]">
       <section className="dashboard-focus">

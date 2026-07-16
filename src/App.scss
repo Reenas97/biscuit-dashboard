@@ -225,6 +225,19 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
   small { color: color.mix($muted, $cream, 78%); }
 }
 .dashboard-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.dashboard-timer { padding: 18px 21px; border: 1px solid $line; border-radius: 17px; background: rgba($paper, .95); box-shadow: 0 9px 25px rgba($dark-brown, .05); }
+.dashboard-timer-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.dashboard-timer-heading h3 { margin: 5px 0 3px; color: $dark-brown; font-family: Georgia, serif; font-size: 19px; font-weight: 500; }
+.dashboard-timer-heading p { margin: 0; color: $muted; font-size: 9px; }
+.timer-start { display: flex; align-items: center; gap: 8px; }
+.timer-start select { min-width: 220px; padding: 10px 12px; border: 1px solid $line; border-radius: 10px; background: $cream; color: $dark-brown; font: inherit; }
+.timer-start button, .timer-stop { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 14px; border: 0; border-radius: 10px; background: $brown; color: white; font-size: 9px; font-weight: 800; cursor: pointer; }
+.timer-start button:disabled { cursor: not-allowed; opacity: .45; }
+.timer-stop { background: $pink; }
+.dashboard-time-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 15px; padding-top: 14px; border-top: 1px solid $line; }
+.dashboard-time-totals > div { display: grid; gap: 3px; min-width: 0; padding: 9px 11px; border-radius: 10px; background: $cream; }
+.dashboard-time-totals span { overflow: hidden; color: $muted; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-time-totals strong { color: $dark-brown; font-size: 10px; }
 .dashboard-main-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(270px, .75fr); align-items: start; gap: 17px; }
 .dashboard-focus, .dashboard-goal, .dashboard-availability, .dashboard-shortcuts, .dashboard-ideas { border: 1px solid $line; border-radius: 17px; background: rgba($paper, .95); box-shadow: 0 9px 25px rgba($dark-brown, .05); }
 .dashboard-focus { padding: 21px; }
@@ -670,6 +683,11 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 
 @media (max-width: 620px) {
   .dashboard-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-timer-heading { align-items: stretch; flex-direction: column; }
+  .timer-start { align-items: stretch; flex-direction: column; }
+  .timer-start select, .timer-start button, .timer-stop { width: 100%; }
+  .timer-start select { min-width: 0; }
+  .dashboard-time-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-lists { grid-template-columns: 1fr; }
   .goals-grid { grid-template-columns: 1fr; }
   .goals-summary { grid-template-columns: 1fr; }
@@ -715,6 +733,7 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 
 @media (max-width: 480px) {
   .dashboard-summary { grid-template-columns: 1fr; }
+  .dashboard-time-totals { grid-template-columns: 1fr; }
   .app-shell { display: block; }
   .sidebar { position: fixed; z-index: 2; inset: auto 0 0; width: 100%; height: auto; padding: 8px; border: 0; border-top: 1px solid $line; }
   .brand, .sidebar-footer { display: none; }

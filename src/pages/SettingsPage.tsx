@@ -6,7 +6,7 @@ import { defaultSettings, loadSettings, settingsEvent, settingsStorageKey } from
 import type { AtelierSettings } from '../settings'
 import { dataChangedEvent, removeLocalData, saveLocalData } from '../lib/cloudData'
 
-const dataKeys = ['reena-biscuit-ideas', 'reena-biscuit-projects', 'reena-biscuit-clients', 'reena-biscuit-materials', 'reena-biscuit-tasks', 'reena-biscuit-unavailable-days', 'reena-biscuit-goals', settingsStorageKey]
+const dataKeys = ['reena-biscuit-ideas', 'reena-biscuit-projects', 'reena-biscuit-clients', 'reena-biscuit-materials', 'reena-biscuit-tasks', 'reena-biscuit-unavailable-days', 'reena-biscuit-goals', 'reena-biscuit-time-entries', settingsStorageKey]
 
 export function SettingsPage() {
   const [form, setForm] = useState<AtelierSettings>(loadSettings)
