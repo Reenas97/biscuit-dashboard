@@ -7,14 +7,23 @@ type TimeEntry = {
   projectId: string
   startedAt: string
   endedAt?: string
-  lastActivityAt?: string
   autoPaused?: boolean
   pauseReason?: string
 }
 
+type IdleDetectorInstance = EventTarget & {
+  userState: 'active' | 'idle' | null
+  screenState: 'locked' | 'unlocked' | null
+  start(options: { threshold: number; signal: AbortSignal }): Promise<void>
+}
+
+type IdleDetectorConstructor = {
+  new(): IdleDetectorInstance
+}
+
 const storageKey = 'reena-biscuit-time-entries'
 const warningAfterMs = 80 * 60 * 1000
-const pauseAfterMs = 90 * 60 * 1000
+const pauseAfterWarningMs = 10 * 60 * 1000
 
 function readEntries() {
   try {
@@ -25,64 +34,42 @@ function readEntries() {
   }
 }
 
+function getIdleDetector() {
+  return (window as Window & { IdleDetector?: IdleDetectorConstructor }).IdleDetector
+}
+
+function showComputerNotification(title: string, body: string) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return
+  const notification = new Notification(title, { body, tag: 'reena-biscuit-timer', requireInteraction: true })
+  notification.onclick = () => {
+    window.focus()
+    notification.close()
+  }
+}
+
 export function TimeTrackingGuard() {
   const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(() => readEntries().find((entry) => !entry.endedAt) ?? null)
   const [showWarning, setShowWarning] = useState(false)
-  const lastSavedActivity = useRef(0)
+  const pauseTimer = useRef<number | null>(null)
 
   const refreshActiveEntry = useCallback(() => {
     setActiveEntry(readEntries().find((entry) => !entry.endedAt) ?? null)
   }, [])
 
-  const registerActivity = useCallback(() => {
+  const pauseEntry = useCallback((automatic: boolean, reason?: string) => {
     const entries = readEntries()
     const current = entries.find((entry) => !entry.endedAt)
     if (!current) return
-    const currentTime = Date.now()
-    setShowWarning(false)
-    if (currentTime - lastSavedActivity.current < 60_000) return
-    lastSavedActivity.current = currentTime
-    const activityAt = new Date(currentTime).toISOString()
-    const nextEntries = entries.map((entry) => entry.id === current.id ? { ...entry, lastActivityAt: activityAt } : entry)
-    saveLocalData(storageKey, JSON.stringify(nextEntries))
-    setActiveEntry({ ...current, lastActivityAt: activityAt })
-  }, [])
-
-  const pauseAutomaticallyIfNeeded = useCallback(() => {
-    const entries = readEntries()
-    const current = entries.find((entry) => !entry.endedAt)
-    if (!current) {
-      setActiveEntry(null)
-      setShowWarning(false)
-      return
-    }
-    const lastActivity = new Date(current.lastActivityAt ?? current.startedAt).getTime()
-    const inactiveFor = Date.now() - lastActivity
-    if (inactiveFor >= pauseAfterMs) {
-      const endedAt = new Date(lastActivity + pauseAfterMs).toISOString()
-      const nextEntries = entries.map((entry) => entry.id === current.id ? {
-        ...entry,
-        endedAt,
-        autoPaused: true,
-        pauseReason: 'Inatividade por mais de 1h30',
-      } : entry)
-      saveLocalData(storageKey, JSON.stringify(nextEntries))
-      setActiveEntry(null)
-      setShowWarning(false)
-      return
-    }
-    setActiveEntry(current)
-    setShowWarning(inactiveFor >= warningAfterMs)
-  }, [])
-
-  const pauseNow = useCallback(() => {
-    const entries = readEntries()
-    const current = entries.find((entry) => !entry.endedAt)
-    if (!current) return
-    const nextEntries = entries.map((entry) => entry.id === current.id ? { ...entry, endedAt: new Date().toISOString() } : entry)
+    const nextEntries = entries.map((entry) => entry.id === current.id ? {
+      ...entry,
+      endedAt: new Date().toISOString(),
+      ...(automatic ? { autoPaused: true, pauseReason: reason } : {}),
+    } : entry)
     saveLocalData(storageKey, JSON.stringify(nextEntries))
     setActiveEntry(null)
     setShowWarning(false)
+    if (pauseTimer.current) window.clearTimeout(pauseTimer.current)
+    if (automatic) showComputerNotification('Projeto pausado automaticamente', reason ?? 'O cronômetro foi pausado por inatividade.')
   }, [])
 
   useEffect(() => {
@@ -92,32 +79,50 @@ export function TimeTrackingGuard() {
 
   useEffect(() => {
     if (!activeEntry) return
-    const activityEvents: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'touchstart', 'scroll']
-    activityEvents.forEach((eventName) => window.addEventListener(eventName, registerActivity, { passive: true }))
-    window.addEventListener('focus', pauseAutomaticallyIfNeeded)
-    document.addEventListener('visibilitychange', pauseAutomaticallyIfNeeded)
-    const initialCheck = window.setTimeout(pauseAutomaticallyIfNeeded, 0)
-    const timer = window.setInterval(pauseAutomaticallyIfNeeded, 30_000)
-    return () => {
-      activityEvents.forEach((eventName) => window.removeEventListener(eventName, registerActivity))
-      window.removeEventListener('focus', pauseAutomaticallyIfNeeded)
-      document.removeEventListener('visibilitychange', pauseAutomaticallyIfNeeded)
-      window.clearTimeout(initialCheck)
-      window.clearInterval(timer)
+    const IdleDetectorApi = getIdleDetector()
+    if (!IdleDetectorApi) return
+    const controller = new AbortController()
+    const detector = new IdleDetectorApi()
+
+    const handleIdleChange = () => {
+      if (detector.screenState === 'locked') {
+        pauseEntry(true, 'Tela bloqueada ou computador em modo de descanso')
+        return
+      }
+      if (detector.userState === 'idle') {
+        setShowWarning(true)
+        showComputerNotification('Você ainda está trabalhando?', 'O projeto será pausado automaticamente em 10 minutos.')
+        if (pauseTimer.current) window.clearTimeout(pauseTimer.current)
+        pauseTimer.current = window.setTimeout(
+          () => pauseEntry(true, 'Computador sem interação por mais de 1h30'),
+          pauseAfterWarningMs,
+        )
+        return
+      }
+      setShowWarning(false)
+      if (pauseTimer.current) window.clearTimeout(pauseTimer.current)
     }
-  }, [activeEntry, pauseAutomaticallyIfNeeded, registerActivity])
+
+    detector.addEventListener('change', handleIdleChange)
+    detector.start({ threshold: warningAfterMs, signal: controller.signal }).catch(() => undefined)
+    return () => {
+      controller.abort()
+      detector.removeEventListener('change', handleIdleChange)
+      if (pauseTimer.current) window.clearTimeout(pauseTimer.current)
+    }
+  }, [activeEntry, pauseEntry])
 
   if (!showWarning || !activeEntry) return null
 
   return <div className="timer-warning-backdrop" role="presentation">
     <section className="timer-warning" role="alertdialog" aria-modal="true" aria-labelledby="timer-warning-title">
       <FaClock />
-      <span className="section-kicker">CRONÔMETRO ATIVO</span>
+      <span className="section-kicker">COMPUTADOR INATIVO</span>
       <h2 id="timer-warning-title">Você ainda está trabalhando?</h2>
-      <p>Não detectamos atividade há 1h20. O projeto será pausado automaticamente em 10 minutos.</p>
+      <p>O computador está sem interação há 1h20. O projeto será pausado automaticamente em 10 minutos.</p>
       <div>
-        <button className="secondary-button" onClick={pauseNow} type="button"><FaPause /> Pausar agora</button>
-        <button className="primary-button" onClick={registerActivity} type="button"><FaPlay /> Ainda estou trabalhando</button>
+        <button className="secondary-button" onClick={() => pauseEntry(false)} type="button"><FaPause /> Pausar agora</button>
+        <button className="primary-button" onClick={() => setShowWarning(false)} type="button"><FaPlay /> Ainda estou trabalhando</button>
       </div>
     </section>
   </div>

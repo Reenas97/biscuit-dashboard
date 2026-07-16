@@ -14,6 +14,8 @@ type StoredGoal = { id: string; title: string; target: number; current: number; 
 type StoredUnavailable = { id: string; date: string; reason: string }
 type TimeEntry = { id: string; projectId: string; startedAt: string; endedAt?: string; lastActivityAt?: string; autoPaused?: boolean; pauseReason?: string }
 
+type IdleDetectorPermission = { requestPermission(): Promise<PermissionState> }
+
 const timeStorageKey = 'reena-biscuit-time-entries'
 
 function readStorage<T>(key: string): T[] {
@@ -54,6 +56,7 @@ export function DashboardPage() {
   const [unavailable] = useState(() => readStorage<StoredUnavailable>('reena-biscuit-unavailable-days'))
   const [timeEntries, setTimeEntries] = useState(() => readStorage<TimeEntry>(timeStorageKey))
   const [selectedProjectId, setSelectedProjectId] = useState('')
+  const [timerPermissionMessage, setTimerPermissionMessage] = useState('')
   const [now, setNow] = useState(() => Date.now())
   const today = dateKey(new Date())
   const activeProjects = projects.filter((project) => project.status !== 'Entregue')
@@ -85,8 +88,23 @@ export function DashboardPage() {
     saveLocalData(timeStorageKey, JSON.stringify(entries))
   }
 
-  function startTimer() {
+  async function startTimer() {
     if (!selectedProjectId || activeEntry) return
+    const IdleDetectorApi = (window as Window & { IdleDetector?: IdleDetectorPermission }).IdleDetector
+    if (!IdleDetectorApi) {
+      setTimerPermissionMessage('Este navegador não consegue detectar a inatividade do computador. Use o Chrome ou Edge no computador.')
+      return
+    }
+    const idlePermission = await IdleDetectorApi.requestPermission()
+    if (idlePermission !== 'granted') {
+      setTimerPermissionMessage('Permita a detecção de atividade do dispositivo para iniciar o cronômetro com pausa automática.')
+      return
+    }
+    let notificationPermission: NotificationPermission = 'denied'
+    if ('Notification' in window) notificationPermission = await Notification.requestPermission()
+    setTimerPermissionMessage(notificationPermission === 'granted'
+      ? 'Detecção do computador e avisos do Chrome ativados.'
+      : 'Detecção do computador ativada. Os avisos do Chrome não foram permitidos, mas a pausa e o Telegram continuam funcionando.')
     const startedAt = new Date().toISOString()
     saveTimeEntries([{ id: crypto.randomUUID(), projectId: selectedProjectId, startedAt, lastActivityAt: startedAt }, ...timeEntries])
     setNow(Date.now())
@@ -119,6 +137,7 @@ export function DashboardPage() {
     <section className="dashboard-timer mt-[18px]">
       <div className="dashboard-timer-heading"><div><span className="section-kicker"><FaClock /> TRABALHANDO AGORA</span><h3>{activeProject ? activeProject.title : 'Cronômetro de produção'}</h3><p>{activeEntry ? `Tempo desta sessão: ${formatDuration(Math.max(0, Math.floor((now - new Date(activeEntry.startedAt).getTime()) / 1000)))}` : 'Escolha um projeto para contabilizar o tempo de trabalho.'}</p></div>{activeEntry ? <button className="timer-stop" onClick={stopTimer} type="button"><FaPause /> Pausar</button> : <div className="timer-start"><select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} aria-label="Projeto em produção"><option value="">Selecione um projeto...</option>{activeProjects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select><button disabled={!selectedProjectId} onClick={startTimer} type="button"><FaPlay /> Iniciar</button></div>}</div>
       {projectsWithTime.length > 0 && <div className="dashboard-time-totals">{projectsWithTime.slice(0, 4).map(({ project, seconds }) => <div key={project.id}><span>{project.title}</span><strong>{formatDuration(seconds)}</strong></div>)}</div>}
+      {timerPermissionMessage && <p className="timer-permission-message">{timerPermissionMessage}</p>}
     </section>
 
     <div className="dashboard-main-grid mt-[18px]">
