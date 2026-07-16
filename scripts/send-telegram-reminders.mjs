@@ -64,7 +64,10 @@ function buildMessage({ tasks, projects, unavailableDays }) {
 
   lines.push('', '📋 Tarefas de hoje')
   if (todayTasks.length === 0) lines.push('• Nenhuma tarefa pendente.')
-  else todayTasks.forEach((task) => lines.push(`• ${task.title} (${task.priority})`))
+  else todayTasks.forEach((task) => {
+    const project = projects.find((item) => item.id === task.projectId)
+    lines.push(`• ${task.title} (${task.priority})${project ? ` — Projeto: ${project.title}` : ''}`)
+  })
 
   lines.push('', '🎀 Prazos dos próximos 7 dias')
   if (upcomingProjects.length === 0) lines.push('• Nenhuma entrega próxima.')
@@ -78,6 +81,8 @@ function buildMessage({ tasks, projects, unavailableDays }) {
     unavailable.forEach((day) => lines.push(`• ${day.reason}`))
   }
 
+  lines.push('', '📅 Abrir planejamento:')
+  lines.push('https://reena-dashboard.web.app/planejamento')
   lines.push('', 'Tenha um lindo dia de criações! 🐱')
   return lines.join('\n')
 }

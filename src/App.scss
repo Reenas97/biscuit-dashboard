@@ -499,6 +499,8 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .planning-layout { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(280px, .8fr); align-items: start; gap: 17px; }
 .planning-actions { display: flex; flex-wrap: wrap; gap: 9px; }
 .planning-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.task-project-link { display: block; width: fit-content; margin-top: 4px; color: var(--brown); font-size: .74rem; font-weight: 700; text-decoration: none; }
+.task-project-link:hover { text-decoration: underline; }
 .calendar-panel, .upcoming-panel, .tasks-panel, .unavailable-panel { border: 1px solid $line; border-radius: 17px; background: rgba($paper, .95); box-shadow: 0 9px 25px rgba($dark-brown, .05); }
 .calendar-panel { min-width: 0; overflow: hidden; }
 .calendar-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 20px; border-bottom: 1px solid $line; }
