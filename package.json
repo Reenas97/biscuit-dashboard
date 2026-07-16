@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build --minify=esbuild",
     "lint": "eslint .",
     "preview": "vite preview",
-    "telegram:test": "node scripts/send-telegram-reminders.mjs"
+    "telegram:test": "node scripts/send-telegram-reminders.mjs",
+    "telegram:time-alerts": "node scripts/send-telegram-time-alerts.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

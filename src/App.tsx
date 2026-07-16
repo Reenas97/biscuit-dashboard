@@ -10,6 +10,7 @@ import { GoalsPage } from './pages/GoalsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { LoginPage } from './pages/LoginPage'
 import { useAuth } from './auth/AuthContext'
+import { TimeTrackingGuard } from './components/TimeTrackingGuard'
 import './App.scss'
 
 function App() {
@@ -17,7 +18,7 @@ function App() {
   if (loading) return <div className="auth-loading"><span /><p>Preparando seu ateliê...</p></div>
   if (!user) return <LoginPage />
   return (
-    <Routes>
+    <><TimeTrackingGuard /><Routes>
       <Route element={<AppLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="ideias" element={<IdeasPage />} />
@@ -29,7 +30,7 @@ function App() {
         <Route path="configuracoes" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    </Routes></>
   )
 }
 

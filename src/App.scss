@@ -238,6 +238,13 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .dashboard-time-totals > div { display: grid; gap: 3px; min-width: 0; padding: 9px 11px; border-radius: 10px; background: $cream; }
 .dashboard-time-totals span { overflow: hidden; color: $muted; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-time-totals strong { color: $dark-brown; font-size: 10px; }
+.timer-warning-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba($dark-brown, .35); backdrop-filter: blur(4px); }
+.timer-warning { width: min(440px, 100%); padding: 30px; border: 1px solid $line; border-radius: 20px; background: $paper; box-shadow: 0 22px 70px rgba($dark-brown, .2); text-align: center; }
+.timer-warning > svg { width: 34px; height: 34px; margin: 0 auto 12px; color: $pink; }
+.timer-warning h2 { margin: 8px 0; color: $dark-brown; font-family: Georgia, serif; font-size: 24px; font-weight: 500; }
+.timer-warning p { margin: 0 auto 22px; color: $muted; font-size: 12px; line-height: 1.6; }
+.timer-warning > div { display: flex; justify-content: center; gap: 10px; }
+.timer-warning button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
 .dashboard-main-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(270px, .75fr); align-items: start; gap: 17px; }
 .dashboard-focus, .dashboard-goal, .dashboard-availability, .dashboard-shortcuts, .dashboard-ideas { border: 1px solid $line; border-radius: 17px; background: rgba($paper, .95); box-shadow: 0 9px 25px rgba($dark-brown, .05); }
 .dashboard-focus { padding: 21px; }

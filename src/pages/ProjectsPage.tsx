@@ -12,7 +12,7 @@ import {
 } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { ConfirmButton } from '../components/ConfirmButton'
-import { saveLocalData } from '../lib/cloudData'
+import { dataChangedEvent, saveLocalData } from '../lib/cloudData'
 import {
   FaArrowRight,
   FaBoxesStacked,
@@ -69,7 +69,7 @@ type Material = {
 }
 
 type Client = { id: string; name: string }
-type TimeEntry = { id: string; projectId: string; startedAt: string; endedAt?: string }
+type TimeEntry = { id: string; projectId: string; startedAt: string; endedAt?: string; autoPaused?: boolean; pauseReason?: string }
 
 type ProjectForm = Omit<Project, 'id' | 'sourceIdeaId' | 'createdAt' | 'tags'> & { tags: string }
 
@@ -153,7 +153,7 @@ export function ProjectsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [materials, setMaterials] = useState<Material[]>(loadMaterials)
   const [clients] = useState<Client[]>(loadClients)
-  const [timeEntries] = useState<TimeEntry[]>(loadTimeEntries)
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>(loadTimeEntries)
   const [now, setNow] = useState(() => Date.now())
   const [materialId, setMaterialId] = useState('')
   const [materialQuantity, setMaterialQuantity] = useState('')
@@ -173,6 +173,12 @@ export function ProjectsPage() {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
   }, [hasActiveTimer])
+
+  useEffect(() => {
+    const refreshTimeEntries = () => setTimeEntries(loadTimeEntries())
+    window.addEventListener(dataChangedEvent, refreshTimeEntries)
+    return () => window.removeEventListener(dataChangedEvent, refreshTimeEntries)
+  }, [])
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor),
@@ -328,7 +334,7 @@ export function ProjectsPage() {
                     const start = new Date(entry.startedAt)
                     const end = entry.endedAt ? new Date(entry.endedAt) : null
                     const seconds = Math.max(0, Math.floor(((end?.getTime() ?? now) - start.getTime()) / 1000))
-                    return <div key={entry.id}><span><strong>{start.toLocaleDateString('pt-BR')}</strong><small>{start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — {end ? end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'em andamento'}</small></span><b>{formatDuration(seconds)}</b></div>
+                    return <div key={entry.id}><span><strong>{start.toLocaleDateString('pt-BR')}{entry.autoPaused ? ' · pausa automática' : ''}</strong><small>{start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — {end ? end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'em andamento'}{entry.pauseReason ? ` · ${entry.pauseReason}` : ''}</small></span><b>{formatDuration(seconds)}</b></div>
                   })}
                 </div>
               ) : <p className="project-material-empty">Nenhum tempo registrado. Inicie o cronômetro pelo Dashboard.</p>}

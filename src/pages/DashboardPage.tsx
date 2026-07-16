@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { FaArrowRight, FaBoxesStacked, FaBullseye, FaCalendarDays, FaClock, FaClipboardCheck, FaFolderPlus, FaPause, FaPaw, FaPlay, FaPlus, FaTriangleExclamation, FaUserPlus } from 'react-icons/fa6'
 import { GiCat } from 'react-icons/gi'
 import { useAtelierSettings } from '../settings'
-import { saveLocalData } from '../lib/cloudData'
+import { dataChangedEvent, saveLocalData } from '../lib/cloudData'
 
 type StoredIdea = { id: string }
 type StoredProject = { id: string; title: string; deadline: string; status: string; type: string; client?: string }
@@ -12,7 +12,7 @@ type StoredTask = { id: string; title: string; date: string; completed: boolean;
 type StoredMaterial = { id: string; name: string; stock: number; minimumStock: number; unit: string }
 type StoredGoal = { id: string; title: string; target: number; current: number; unit: string; deadline: string }
 type StoredUnavailable = { id: string; date: string; reason: string }
-type TimeEntry = { id: string; projectId: string; startedAt: string; endedAt?: string }
+type TimeEntry = { id: string; projectId: string; startedAt: string; endedAt?: string; lastActivityAt?: string; autoPaused?: boolean; pauseReason?: string }
 
 const timeStorageKey = 'reena-biscuit-time-entries'
 
@@ -69,6 +69,12 @@ export function DashboardPage() {
   const activeProject = projects.find((project) => project.id === activeEntry?.projectId)
 
   useEffect(() => {
+    const refreshTimeEntries = () => setTimeEntries(readStorage<TimeEntry>(timeStorageKey))
+    window.addEventListener(dataChangedEvent, refreshTimeEntries)
+    return () => window.removeEventListener(dataChangedEvent, refreshTimeEntries)
+  }, [])
+
+  useEffect(() => {
     if (!activeEntry) return
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
@@ -81,7 +87,8 @@ export function DashboardPage() {
 
   function startTimer() {
     if (!selectedProjectId || activeEntry) return
-    saveTimeEntries([{ id: crypto.randomUUID(), projectId: selectedProjectId, startedAt: new Date().toISOString() }, ...timeEntries])
+    const startedAt = new Date().toISOString()
+    saveTimeEntries([{ id: crypto.randomUUID(), projectId: selectedProjectId, startedAt, lastActivityAt: startedAt }, ...timeEntries])
     setNow(Date.now())
   }
 
