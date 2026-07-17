@@ -26,7 +26,6 @@ const storageKey = 'reena-biscuit-time-entries'
 const heartbeatStorageKey = 'reena-biscuit-timer-heartbeat'
 const warningAfterMs = 80 * 60 * 1000
 const pauseAfterWarningMs = 10 * 60 * 1000
-const suspendedAfterMs = 90 * 1000
 
 function readEntries() {
   try {
@@ -97,13 +96,8 @@ export function TimeTrackingGuard() {
       writeHeartbeat(current.id)
       return
     }
-    const gap = Date.now() - heartbeat.timestamp
-    if (gap >= suspendedAfterMs) {
-      pauseEntry(true, 'Computador entrou em modo de descanso, foi desligado ou suspendeu o navegador', new Date(heartbeat.timestamp).toISOString())
-      return
-    }
     writeHeartbeat(current.id)
-  }, [pauseEntry])
+  }, [])
 
   useEffect(() => {
     window.addEventListener(dataChangedEvent, refreshActiveEntry)
@@ -117,16 +111,13 @@ export function TimeTrackingGuard() {
     const initialCheck = window.setTimeout(checkComputerSuspension, 0)
     const heartbeatTimer = window.setInterval(checkComputerSuspension, 30_000)
     const handleResume = () => checkComputerSuspension()
-    const handleFreeze = () => pauseEntry(true, 'Computador ou navegador entrou em modo de descanso')
     window.addEventListener('focus', handleResume)
     document.addEventListener('visibilitychange', handleResume)
-    document.addEventListener('freeze', handleFreeze)
     return () => {
       window.clearTimeout(initialCheck)
       window.clearInterval(heartbeatTimer)
       window.removeEventListener('focus', handleResume)
       document.removeEventListener('visibilitychange', handleResume)
-      document.removeEventListener('freeze', handleFreeze)
     }
   }, [activeEntry, checkComputerSuspension, pauseEntry])
 

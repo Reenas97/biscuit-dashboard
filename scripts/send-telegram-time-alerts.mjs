@@ -36,7 +36,7 @@ const timerState = timerSnapshot.data()
 
 if (timerState?.status === 'active' && timerState.entryId && timerState.heartbeatAt) {
   const heartbeatTime = new Date(timerState.heartbeatAt).getTime()
-  const heartbeatExpired = Number.isFinite(heartbeatTime) && Date.now() - heartbeatTime >= 3 * 60 * 1000
+  const heartbeatExpired = Number.isFinite(heartbeatTime) && Date.now() - heartbeatTime >= 95 * 60 * 1000
   if (heartbeatExpired) {
     const reason = 'Computador em descanso, desligado, navegador fechado ou sem conexão'
     const entryReference = userReference.collection('timeEntries').doc(timerState.entryId)

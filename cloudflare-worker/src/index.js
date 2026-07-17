@@ -223,7 +223,7 @@ async function checkInactiveTimer(env) {
 
   if (timer?.status === 'active' && timer.entryId && timer.heartbeatAt) {
     const heartbeatTime = new Date(timer.heartbeatAt).getTime()
-    if (Number.isFinite(heartbeatTime) && Date.now() - heartbeatTime >= 3 * 60 * 1000) {
+    if (Number.isFinite(heartbeatTime) && Date.now() - heartbeatTime >= 95 * 60 * 1000) {
       const reason = 'Computador em descanso, desligado, navegador fechado ou sem conexão'
       const entryPath = `${userPath}/timeEntries/${timer.entryId}`
       const entry = await firestore.get(entryPath)
