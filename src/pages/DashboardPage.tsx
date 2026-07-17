@@ -4,6 +4,7 @@ import { FaArrowRight, FaBoxesStacked, FaBullseye, FaCalendarDays, FaClock, FaCl
 import { GiCat } from 'react-icons/gi'
 import { useAtelierSettings } from '../settings'
 import { dataChangedEvent, saveLocalData } from '../lib/cloudData'
+import { sendTimerHeartbeat, stopTimerHeartbeat } from '../lib/timerHeartbeat'
 
 type StoredIdea = { id: string }
 type StoredProject = { id: string; title: string; deadline: string; status: string; type: string; client?: string }
@@ -109,12 +110,14 @@ export function DashboardPage() {
     const entryId = crypto.randomUUID()
     localStorage.setItem('reena-biscuit-timer-heartbeat', JSON.stringify({ entryId, timestamp: Date.now() }))
     saveTimeEntries([{ id: entryId, projectId: selectedProjectId, startedAt, lastActivityAt: startedAt }, ...timeEntries])
+    sendTimerHeartbeat({ id: entryId, projectId: selectedProjectId }).catch(() => undefined)
     setNow(Date.now())
   }
 
   function stopTimer() {
     if (!activeEntry) return
     saveTimeEntries(timeEntries.map((entry) => entry.id === activeEntry.id ? { ...entry, endedAt: new Date().toISOString() } : entry))
+    stopTimerHeartbeat('Pausa manual no Dashboard').catch(() => undefined)
   }
 
   function projectSeconds(projectId: string) {

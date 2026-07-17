@@ -30,6 +30,24 @@ function formatDateTime(value) {
   }).format(new Date(value))
 }
 
+const timerReference = userReference.collection('timer').doc('current')
+const timerSnapshot = await timerReference.get()
+const timerState = timerSnapshot.data()
+
+if (timerState?.status === 'active' && timerState.entryId && timerState.heartbeatAt) {
+  const heartbeatTime = new Date(timerState.heartbeatAt).getTime()
+  const heartbeatExpired = Number.isFinite(heartbeatTime) && Date.now() - heartbeatTime >= 3 * 60 * 1000
+  if (heartbeatExpired) {
+    const reason = 'Computador em descanso, desligado, navegador fechado ou sem conexão'
+    const entryReference = userReference.collection('timeEntries').doc(timerState.entryId)
+    const entrySnapshot = await entryReference.get()
+    if (entrySnapshot.exists && !entrySnapshot.data()?.endedAt) {
+      await entryReference.set({ endedAt: timerState.heartbeatAt, autoPaused: true, pauseReason: reason }, { merge: true })
+    }
+    await timerReference.set({ status: 'paused', pauseReason: reason, updatedAt: new Date().toISOString() }, { merge: true })
+  }
+}
+
 const [timeEntries, projects] = await Promise.all([
   readIndexedCollection('timeEntries'),
   readIndexedCollection('projects'),
@@ -48,7 +66,7 @@ for (const entry of automaticPauses) {
     '',
     `Projeto: ${projectName}`,
     `Horário da pausa: ${formatDateTime(entry.endedAt)}`,
-    'Motivo: inatividade por mais de 1h30.',
+    `Motivo: ${entry.pauseReason ?? 'inatividade detectada'}.`,
     '',
     'Abrir o dashboard:',
     'https://reena-dashboard.web.app/',

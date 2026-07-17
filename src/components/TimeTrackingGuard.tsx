@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FaClock, FaPause, FaPlay } from 'react-icons/fa6'
 import { dataChangedEvent, saveLocalData } from '../lib/cloudData'
+import { sendTimerHeartbeat, stopTimerHeartbeat } from '../lib/timerHeartbeat'
 
 type TimeEntry = {
   id: string
@@ -80,6 +81,7 @@ export function TimeTrackingGuard() {
       ...(automatic ? { autoPaused: true, pauseReason: reason } : {}),
     } : entry)
     saveLocalData(storageKey, JSON.stringify(nextEntries))
+    stopTimerHeartbeat(reason ?? 'Pausa manual').catch(() => undefined)
     setActiveEntry(null)
     setShowWarning(false)
     localStorage.removeItem(heartbeatStorageKey)
@@ -127,6 +129,13 @@ export function TimeTrackingGuard() {
       document.removeEventListener('freeze', handleFreeze)
     }
   }, [activeEntry, checkComputerSuspension, pauseEntry])
+
+  useEffect(() => {
+    if (!activeEntry) return
+    sendTimerHeartbeat(activeEntry).catch(() => undefined)
+    const cloudHeartbeat = window.setInterval(() => sendTimerHeartbeat(activeEntry).catch(() => undefined), 60_000)
+    return () => window.clearInterval(cloudHeartbeat)
+  }, [activeEntry])
 
   useEffect(() => {
     if (!activeEntry) return

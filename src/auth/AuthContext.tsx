@@ -4,6 +4,8 @@ import type { ReactNode } from 'react'
 import { createUserWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth'
 import type { User } from 'firebase/auth'
 import { auth } from '../lib/firebase'
+import { pushLocalData } from '../lib/cloudData'
+import { stopTimerHeartbeat } from '../lib/timerHeartbeat'
 
 type AuthContextValue = {
   user: User | null
@@ -27,7 +29,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     login: async (email, password) => { await signInWithEmailAndPassword(auth, email, password) },
     register: async (name, email, password) => { const credential = await createUserWithEmailAndPassword(auth, email, password); await updateProfile(credential.user, { displayName: name }) },
-    logout: async () => { await signOut(auth) },
+    logout: async () => {
+      const activeUser = auth.currentUser
+      const storageKey = 'reena-biscuit-time-entries'
+      try {
+        const entries = JSON.parse(localStorage.getItem(storageKey) ?? '[]') as { id: string; endedAt?: string }[]
+        const activeEntry = Array.isArray(entries) ? entries.find((entry) => !entry.endedAt) : null
+        if (activeEntry) {
+          localStorage.setItem(storageKey, JSON.stringify(entries.map((entry) => entry.id === activeEntry.id ? { ...entry, endedAt: new Date().toISOString(), pauseReason: 'Logout realizado' } : entry)))
+          await stopTimerHeartbeat('Logout realizado')
+          if (activeUser) await pushLocalData(activeUser)
+        }
+      } finally {
+        await signOut(auth)
+      }
+    },
     resetPassword: async (email) => { await sendPasswordResetEmail(auth, email) },
   }), [user, loading])
 
