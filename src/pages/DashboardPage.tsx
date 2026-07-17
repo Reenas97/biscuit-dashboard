@@ -92,20 +92,19 @@ export function DashboardPage() {
   async function startTimer() {
     if (!selectedProjectId || activeEntry) return
     const IdleDetectorApi = (window as Window & { IdleDetector?: IdleDetectorPermission }).IdleDetector
-    if (!IdleDetectorApi) {
-      setTimerPermissionMessage('Este navegador não consegue detectar a inatividade do computador. Use o Chrome ou Edge no computador.')
-      return
-    }
-    const idlePermission = await IdleDetectorApi.requestPermission()
-    if (idlePermission !== 'granted') {
-      setTimerPermissionMessage('Permita a detecção de atividade do dispositivo para iniciar o cronômetro com pausa automática.')
-      return
+    let idlePermission: PermissionState = 'denied'
+    if (IdleDetectorApi) {
+      try { idlePermission = await IdleDetectorApi.requestPermission() } catch { idlePermission = 'denied' }
     }
     let notificationPermission: NotificationPermission = 'denied'
     if ('Notification' in window) notificationPermission = await Notification.requestPermission()
-    setTimerPermissionMessage(notificationPermission === 'granted'
-      ? 'Detecção do computador e avisos do Chrome ativados.'
-      : 'Detecção do computador ativada. Os avisos do Chrome não foram permitidos, mas a pausa e o Telegram continuam funcionando.')
+    if (idlePermission === 'granted' && notificationPermission === 'granted') {
+      setTimerPermissionMessage('Detecção do computador e avisos do Chrome ativados.')
+    } else if (idlePermission === 'granted') {
+      setTimerPermissionMessage('Detecção do computador ativada. Sem notificações do Chrome; o monitor externo e o Telegram continuam funcionando.')
+    } else {
+      setTimerPermissionMessage('Cronômetro iniciado com o monitor externo do Firebase. A detecção direta do Chrome não ficou disponível, mas descanso, desligamento e logout continuam protegidos.')
+    }
     const startedAt = new Date().toISOString()
     const entryId = crypto.randomUUID()
     localStorage.setItem('reena-biscuit-timer-heartbeat', JSON.stringify({ entryId, timestamp: Date.now() }))
