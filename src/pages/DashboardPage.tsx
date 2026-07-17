@@ -106,7 +106,9 @@ export function DashboardPage() {
       ? 'Detecção do computador e avisos do Chrome ativados.'
       : 'Detecção do computador ativada. Os avisos do Chrome não foram permitidos, mas a pausa e o Telegram continuam funcionando.')
     const startedAt = new Date().toISOString()
-    saveTimeEntries([{ id: crypto.randomUUID(), projectId: selectedProjectId, startedAt, lastActivityAt: startedAt }, ...timeEntries])
+    const entryId = crypto.randomUUID()
+    localStorage.setItem('reena-biscuit-timer-heartbeat', JSON.stringify({ entryId, timestamp: Date.now() }))
+    saveTimeEntries([{ id: entryId, projectId: selectedProjectId, startedAt, lastActivityAt: startedAt }, ...timeEntries])
     setNow(Date.now())
   }
 

@@ -22,8 +22,10 @@ type IdleDetectorConstructor = {
 }
 
 const storageKey = 'reena-biscuit-time-entries'
+const heartbeatStorageKey = 'reena-biscuit-timer-heartbeat'
 const warningAfterMs = 80 * 60 * 1000
 const pauseAfterWarningMs = 10 * 60 * 1000
+const suspendedAfterMs = 90 * 1000
 
 function readEntries() {
   try {
@@ -36,6 +38,18 @@ function readEntries() {
 
 function getIdleDetector() {
   return (window as Window & { IdleDetector?: IdleDetectorConstructor }).IdleDetector
+}
+
+function readHeartbeat() {
+  try {
+    return JSON.parse(localStorage.getItem(heartbeatStorageKey) ?? 'null') as { entryId: string; timestamp: number } | null
+  } catch {
+    return null
+  }
+}
+
+function writeHeartbeat(entryId: string, timestamp = Date.now()) {
+  localStorage.setItem(heartbeatStorageKey, JSON.stringify({ entryId, timestamp }))
 }
 
 function showComputerNotification(title: string, body: string) {
@@ -56,26 +70,63 @@ export function TimeTrackingGuard() {
     setActiveEntry(readEntries().find((entry) => !entry.endedAt) ?? null)
   }, [])
 
-  const pauseEntry = useCallback((automatic: boolean, reason?: string) => {
+  const pauseEntry = useCallback((automatic: boolean, reason?: string, endedAt = new Date().toISOString()) => {
     const entries = readEntries()
     const current = entries.find((entry) => !entry.endedAt)
     if (!current) return
     const nextEntries = entries.map((entry) => entry.id === current.id ? {
       ...entry,
-      endedAt: new Date().toISOString(),
+      endedAt,
       ...(automatic ? { autoPaused: true, pauseReason: reason } : {}),
     } : entry)
     saveLocalData(storageKey, JSON.stringify(nextEntries))
     setActiveEntry(null)
     setShowWarning(false)
+    localStorage.removeItem(heartbeatStorageKey)
     if (pauseTimer.current) window.clearTimeout(pauseTimer.current)
     if (automatic) showComputerNotification('Projeto pausado automaticamente', reason ?? 'O cronômetro foi pausado por inatividade.')
   }, [])
+
+  const checkComputerSuspension = useCallback(() => {
+    const current = readEntries().find((entry) => !entry.endedAt)
+    if (!current) return
+    const heartbeat = readHeartbeat()
+    if (!heartbeat || heartbeat.entryId !== current.id) {
+      writeHeartbeat(current.id)
+      return
+    }
+    const gap = Date.now() - heartbeat.timestamp
+    if (gap >= suspendedAfterMs) {
+      pauseEntry(true, 'Computador entrou em modo de descanso, foi desligado ou suspendeu o navegador', new Date(heartbeat.timestamp).toISOString())
+      return
+    }
+    writeHeartbeat(current.id)
+  }, [pauseEntry])
 
   useEffect(() => {
     window.addEventListener(dataChangedEvent, refreshActiveEntry)
     return () => window.removeEventListener(dataChangedEvent, refreshActiveEntry)
   }, [refreshActiveEntry])
+
+  useEffect(() => {
+    if (!activeEntry) return
+    const heartbeat = readHeartbeat()
+    if (!heartbeat || heartbeat.entryId !== activeEntry.id) writeHeartbeat(activeEntry.id)
+    const initialCheck = window.setTimeout(checkComputerSuspension, 0)
+    const heartbeatTimer = window.setInterval(checkComputerSuspension, 30_000)
+    const handleResume = () => checkComputerSuspension()
+    const handleFreeze = () => pauseEntry(true, 'Computador ou navegador entrou em modo de descanso')
+    window.addEventListener('focus', handleResume)
+    document.addEventListener('visibilitychange', handleResume)
+    document.addEventListener('freeze', handleFreeze)
+    return () => {
+      window.clearTimeout(initialCheck)
+      window.clearInterval(heartbeatTimer)
+      window.removeEventListener('focus', handleResume)
+      document.removeEventListener('visibilitychange', handleResume)
+      document.removeEventListener('freeze', handleFreeze)
+    }
+  }, [activeEntry, checkComputerSuspension, pauseEntry])
 
   useEffect(() => {
     if (!activeEntry) return
