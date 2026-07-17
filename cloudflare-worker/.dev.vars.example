@@ -1,0 +1,4 @@
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"reena-dashboard"}
+FIREBASE_USER_ID=seu_uid_do_firebase
+TELEGRAM_BOT_TOKEN=token_do_bot
+TELEGRAM_CHAT_ID=id_da_conversa

@@ -2,9 +2,6 @@ name: Lembretes diários no Telegram
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 8 * * *'
-      timezone: 'America/Sao_Paulo'
 
 permissions:
   contents: read
