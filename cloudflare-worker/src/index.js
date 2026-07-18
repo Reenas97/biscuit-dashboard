@@ -219,11 +219,16 @@ function buildDailyMessage({ tasks, projects, unavailableDays }) {
 async function checkInactiveTimer(env) {
   const firestore = createFirestoreClient(env)
   const userPath = `users/${env.FIREBASE_USER_ID}`
-  const timer = await firestore.get(`${userPath}/timer/current`)
+  const [timer, settings] = await Promise.all([
+    firestore.get(`${userPath}/timer/current`),
+    firestore.get(`${userPath}/settings/atelier`),
+  ])
+  const configuredPauseMinutes = Number(settings?.timerPauseMinutes)
+  const pauseAfterMinutes = [10, 20, 30, 40, 60, 90, 120].includes(configuredPauseMinutes) ? configuredPauseMinutes : 20
 
   if (timer?.status === 'active' && timer.entryId && timer.heartbeatAt) {
     const heartbeatTime = new Date(timer.heartbeatAt).getTime()
-    if (Number.isFinite(heartbeatTime) && Date.now() - heartbeatTime >= 20 * 60 * 1000) {
+    if (Number.isFinite(heartbeatTime) && Date.now() - heartbeatTime >= pauseAfterMinutes * 60 * 1000) {
       const reason = 'Computador em descanso, desligado, navegador fechado ou sem conexão'
       const entryPath = `${userPath}/timeEntries/${timer.entryId}`
       const entry = await firestore.get(entryPath)

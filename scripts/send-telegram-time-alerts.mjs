@@ -31,12 +31,17 @@ function formatDateTime(value) {
 }
 
 const timerReference = userReference.collection('timer').doc('current')
-const timerSnapshot = await timerReference.get()
+const [timerSnapshot, settingsSnapshot] = await Promise.all([
+  timerReference.get(),
+  userReference.collection('settings').doc('atelier').get(),
+])
 const timerState = timerSnapshot.data()
+const configuredPauseMinutes = Number(settingsSnapshot.data()?.timerPauseMinutes)
+const pauseAfterMinutes = [10, 20, 30, 40, 60, 90, 120].includes(configuredPauseMinutes) ? configuredPauseMinutes : 20
 
 if (timerState?.status === 'active' && timerState.entryId && timerState.heartbeatAt) {
   const heartbeatTime = new Date(timerState.heartbeatAt).getTime()
-  const heartbeatExpired = Number.isFinite(heartbeatTime) && Date.now() - heartbeatTime >= 20 * 60 * 1000
+  const heartbeatExpired = Number.isFinite(heartbeatTime) && Date.now() - heartbeatTime >= pauseAfterMinutes * 60 * 1000
   if (heartbeatExpired) {
     const reason = 'Computador em descanso, desligado, navegador fechado ou sem conexão'
     const entryReference = userReference.collection('timeEntries').doc(timerState.entryId)

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { FaClock, FaPause, FaPlay } from 'react-icons/fa6'
 import { dataChangedEvent, saveLocalData } from '../lib/cloudData'
 import { sendTimerHeartbeat, stopTimerHeartbeat } from '../lib/timerHeartbeat'
+import { useAtelierSettings } from '../settings'
 
 type TimeEntry = {
   id: string
@@ -24,7 +25,6 @@ type IdleDetectorConstructor = {
 
 const storageKey = 'reena-biscuit-time-entries'
 const heartbeatStorageKey = 'reena-biscuit-timer-heartbeat'
-const warningAfterMs = 15 * 60 * 1000
 const pauseAfterWarningMs = 5 * 60 * 1000
 
 function readEntries() {
@@ -62,6 +62,9 @@ function showComputerNotification(title: string, body: string) {
 }
 
 export function TimeTrackingGuard() {
+  const settings = useAtelierSettings()
+  const pauseAfterMinutes = settings.timerPauseMinutes
+  const warningAfterMinutes = Math.max(5, pauseAfterMinutes - 5)
   const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(() => readEntries().find((entry) => !entry.endedAt) ?? null)
   const [showWarning, setShowWarning] = useState(false)
   const pauseTimer = useRef<number | null>(null)
@@ -145,7 +148,7 @@ export function TimeTrackingGuard() {
         showComputerNotification('Você ainda está trabalhando?', 'O projeto será pausado automaticamente em 5 minutos.')
         if (pauseTimer.current) window.clearTimeout(pauseTimer.current)
         pauseTimer.current = window.setTimeout(
-          () => pauseEntry(true, 'Computador sem interação por mais de 20 minutos'),
+          () => pauseEntry(true, `Computador sem interação por mais de ${pauseAfterMinutes} minutos`),
           pauseAfterWarningMs,
         )
         return
@@ -155,13 +158,13 @@ export function TimeTrackingGuard() {
     }
 
     detector.addEventListener('change', handleIdleChange)
-    detector.start({ threshold: warningAfterMs, signal: controller.signal }).catch(() => undefined)
+    detector.start({ threshold: warningAfterMinutes * 60 * 1000, signal: controller.signal }).catch(() => undefined)
     return () => {
       controller.abort()
       detector.removeEventListener('change', handleIdleChange)
       if (pauseTimer.current) window.clearTimeout(pauseTimer.current)
     }
-  }, [activeEntry, pauseEntry])
+  }, [activeEntry, pauseAfterMinutes, pauseEntry, warningAfterMinutes])
 
   if (!showWarning || !activeEntry) return null
 
@@ -170,7 +173,7 @@ export function TimeTrackingGuard() {
       <FaClock />
       <span className="section-kicker">COMPUTADOR INATIVO</span>
       <h2 id="timer-warning-title">Você ainda está trabalhando?</h2>
-      <p>O computador está sem interação há 15 minutos. O projeto será pausado automaticamente em 5 minutos.</p>
+      <p>O computador está sem interação há {warningAfterMinutes} minutos. O projeto será pausado automaticamente em 5 minutos.</p>
       <div>
         <button className="secondary-button" onClick={() => pauseEntry(false)} type="button"><FaPause /> Pausar agora</button>
         <button className="primary-button" onClick={() => setShowWarning(false)} type="button"><FaPlay /> Ainda estou trabalhando</button>
