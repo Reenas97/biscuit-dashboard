@@ -24,8 +24,8 @@ type IdleDetectorConstructor = {
 
 const storageKey = 'reena-biscuit-time-entries'
 const heartbeatStorageKey = 'reena-biscuit-timer-heartbeat'
-const warningAfterMs = 80 * 60 * 1000
-const pauseAfterWarningMs = 10 * 60 * 1000
+const warningAfterMs = 15 * 60 * 1000
+const pauseAfterWarningMs = 5 * 60 * 1000
 
 function readEntries() {
   try {
@@ -142,10 +142,10 @@ export function TimeTrackingGuard() {
       }
       if (detector.userState === 'idle') {
         setShowWarning(true)
-        showComputerNotification('Você ainda está trabalhando?', 'O projeto será pausado automaticamente em 10 minutos.')
+        showComputerNotification('Você ainda está trabalhando?', 'O projeto será pausado automaticamente em 5 minutos.')
         if (pauseTimer.current) window.clearTimeout(pauseTimer.current)
         pauseTimer.current = window.setTimeout(
-          () => pauseEntry(true, 'Computador sem interação por mais de 1h30'),
+          () => pauseEntry(true, 'Computador sem interação por mais de 20 minutos'),
           pauseAfterWarningMs,
         )
         return
@@ -170,7 +170,7 @@ export function TimeTrackingGuard() {
       <FaClock />
       <span className="section-kicker">COMPUTADOR INATIVO</span>
       <h2 id="timer-warning-title">Você ainda está trabalhando?</h2>
-      <p>O computador está sem interação há 1h20. O projeto será pausado automaticamente em 10 minutos.</p>
+      <p>O computador está sem interação há 15 minutos. O projeto será pausado automaticamente em 5 minutos.</p>
       <div>
         <button className="secondary-button" onClick={() => pauseEntry(false)} type="button"><FaPause /> Pausar agora</button>
         <button className="primary-button" onClick={() => setShowWarning(false)} type="button"><FaPlay /> Ainda estou trabalhando</button>
