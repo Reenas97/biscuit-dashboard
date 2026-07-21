@@ -13,6 +13,7 @@ import {
 import type { DragEndEvent } from '@dnd-kit/core'
 import { ConfirmButton } from '../components/ConfirmButton'
 import { dataChangedEvent, saveLocalData } from '../lib/cloudData'
+import { useAtelierSettings } from '../settings'
 import {
   FaArrowRight,
   FaBoxesStacked,
@@ -109,6 +110,10 @@ function formatDuration(totalSeconds: number) {
   return hours > 0 ? `${hours}h ${String(minutes).padStart(2, '0')}min` : `${minutes}min`
 }
 
+function formatLaborValue(seconds: number, hourlyRate: number) {
+  return (seconds / 3600 * hourlyRate).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
 function KanbanCard({ project, onOpen }: { project: Project; onOpen: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: project.id })
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined
@@ -146,6 +151,7 @@ function KanbanColumn({ status, projects, onOpen }: { status: ProjectStatus; pro
 }
 
 export function ProjectsPage() {
+  const settings = useAtelierSettings()
   const [projects, setProjects] = useState<Project[]>(loadProjects)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -320,6 +326,7 @@ export function ProjectsPage() {
             <div className="project-detail-grid">
               <div><span><FaCalendarDays /> Prazo</span><strong>{selectedProject.deadline ? new Date(`${selectedProject.deadline}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : 'Sem prazo definido'}</strong></div>
               <div><span><FaUser /> Cliente</span><strong>{selectedProject.client || 'Projeto pessoal'}</strong></div>
+              <div><span><FaClock /> Mão de obra</span><strong>{formatLaborValue(selectedTimeSeconds, settings.hourlyRate)}</strong></div>
             </div>
             {selectedProject.tags.length > 0 && <div className="idea-tags detail-tags"><FaTag />{selectedProject.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>}
             {selectedProject.referenceLink && <a className="reference-link project-reference" href={selectedProject.referenceLink} target="_blank" rel="noreferrer"><FaLink /> Abrir referência do projeto</a>}

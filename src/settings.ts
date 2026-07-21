@@ -12,11 +12,12 @@ export type AtelierSettings = {
   currency: string
   logo: string
   timerPauseMinutes: number
+  hourlyRate: number
 }
 
 export const settingsStorageKey = 'reena-biscuit-settings'
 export const settingsEvent = 'reena-settings-changed'
-export const defaultSettings: AtelierSettings = { studioName: 'Reena Biscuit', subtitle: 'Ateliê de biscuit', ownerName: 'Renata', phone: '', instagram: '', email: '', city: '', state: '', currency: 'BRL', logo: '', timerPauseMinutes: 20 }
+export const defaultSettings: AtelierSettings = { studioName: 'Reena Biscuit', subtitle: 'Ateliê de biscuit', ownerName: 'Renata', phone: '', instagram: '', email: '', city: '', state: '', currency: 'BRL', logo: '', timerPauseMinutes: 20, hourlyRate: 7.37 }
 
 export function loadSettings(): AtelierSettings {
   const saved = localStorage.getItem(settingsStorageKey)

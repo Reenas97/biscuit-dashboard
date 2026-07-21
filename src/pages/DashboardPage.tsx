@@ -46,6 +46,10 @@ function formatDuration(totalSeconds: number) {
   return hours > 0 ? `${hours}h ${String(minutes).padStart(2, '0')}min` : `${minutes}min ${String(seconds).padStart(2, '0')}s`
 }
 
+function formatLaborValue(seconds: number, hourlyRate: number) {
+  return (seconds / 3600 * hourlyRate).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
 export function DashboardPage() {
   const settings = useAtelierSettings()
   const [ideas] = useState(() => readStorage<StoredIdea>('reena-biscuit-ideas'))
@@ -127,6 +131,7 @@ export function DashboardPage() {
   }
 
   const projectsWithTime = projects.map((project) => ({ project, seconds: projectSeconds(project.id) })).filter((item) => item.seconds > 0).sort((a, b) => b.seconds - a.seconds)
+  const activeProjectSeconds = activeProject ? projectSeconds(activeProject.id) : 0
 
   return <>
     <div className="welcome-card"><div><span className="eyebrow">{formatToday()}</span><h2>Bom dia, {settings.ownerName.split(/\s+/)[0] || 'Renata'} <FaPaw className="greeting-paw" /></h2><p>{overdueProjects.length ? `${overdueProjects.length} ${overdueProjects.length === 1 ? 'entrega precisa' : 'entregas precisam'} da sua atenção.` : 'Um resumo do que precisa da sua atenção hoje.'}</p></div><div className="cat-scene"><FaPaw className="scene-paw scene-paw-one" /><FaPaw className="scene-paw scene-paw-two" /><GiCat className="decorative-cat" /></div></div>
@@ -139,8 +144,8 @@ export function DashboardPage() {
     </div>
 
     <section className="dashboard-timer mt-[18px]">
-      <div className="dashboard-timer-heading"><div><span className="section-kicker"><FaClock /> TRABALHANDO AGORA</span><h3>{activeProject ? activeProject.title : 'Cronômetro de produção'}</h3><p>{activeEntry ? `Tempo desta sessão: ${formatDuration(Math.max(0, Math.floor((now - new Date(activeEntry.startedAt).getTime()) / 1000)))}` : 'Escolha um projeto para contabilizar o tempo de trabalho.'}</p></div>{activeEntry ? <button className="timer-stop" onClick={stopTimer} type="button"><FaPause /> Pausar</button> : <div className="timer-start"><select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} aria-label="Projeto em produção"><option value="">Selecione um projeto...</option>{activeProjects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select><button disabled={!selectedProjectId} onClick={startTimer} type="button"><FaPlay /> Iniciar</button></div>}</div>
-      {projectsWithTime.length > 0 && <div className="dashboard-time-totals">{projectsWithTime.slice(0, 4).map(({ project, seconds }) => <div key={project.id}><span>{project.title}</span><strong>{formatDuration(seconds)}</strong></div>)}</div>}
+      <div className="dashboard-timer-heading"><div><span className="section-kicker"><FaClock /> TRABALHANDO AGORA</span><h3>{activeProject ? activeProject.title : 'Nenhum projeto sendo tocado no momento'}</h3><p>{activeEntry ? `Tempo total: ${formatDuration(activeProjectSeconds)} · Mão de obra acumulada: ${formatLaborValue(activeProjectSeconds, settings.hourlyRate)}` : 'Escolha um projeto para começar a contabilizar o tempo e o valor da peça.'}</p></div>{activeEntry ? <button className="timer-stop" onClick={stopTimer} type="button"><FaPause /> Pausar</button> : <div className="timer-start"><select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} aria-label="Projeto em produção"><option value="">Selecione um projeto...</option>{activeProjects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select><button disabled={!selectedProjectId} onClick={startTimer} type="button"><FaPlay /> Iniciar</button></div>}</div>
+      {projectsWithTime.length > 0 && <div className="dashboard-time-totals">{projectsWithTime.slice(0, 4).map(({ project, seconds }) => <div key={project.id}><span>{project.title}</span><strong>{formatDuration(seconds)}</strong><small>{formatLaborValue(seconds, settings.hourlyRate)} de mão de obra</small></div>)}</div>}
       {timerPermissionMessage && <p className="timer-permission-message">{timerPermissionMessage}</p>}
     </section>
 
