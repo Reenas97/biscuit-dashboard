@@ -15,7 +15,7 @@ import { useAtelierSettings } from '../settings'
 import { useAuth } from '../auth/AuthContext'
 
 const sections = [
-  { icon: FaHouse, label: 'Dashboard', path: '/' },
+  { icon: FaHouse, label: 'Dashboard', path: '/dashboard' },
   { icon: FaLightbulb, label: 'Ideias', path: '/ideias' },
   { icon: FaClipboardList, label: 'Projetos', path: '/projetos' },
   { icon: FaUsers, label: 'Clientes', path: '/clientes' },

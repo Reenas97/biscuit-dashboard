@@ -4,7 +4,7 @@ import { Topbar } from './Topbar'
 import { CloudSync } from './CloudSync'
 
 const titles: Record<string, string> = {
-  '/': 'Dashboard',
+  '/dashboard': 'Dashboard',
   '/ideias': 'Ideias',
   '/projetos': 'Projetos',
   '/clientes': 'Clientes',

@@ -20,7 +20,8 @@ function App() {
   return (
     <><TimeTrackingGuard /><Routes>
       <Route element={<AppLayout />}>
-        <Route index element={<DashboardPage />} />
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<DashboardPage />} />
         <Route path="ideias" element={<IdeasPage />} />
         <Route path="projetos" element={<ProjectsPage />} />
         <Route path="materiais" element={<MaterialsPage />} />
@@ -29,7 +30,7 @@ function App() {
         <Route path="metas" element={<GoalsPage />} />
         <Route path="configuracoes" element={<SettingsPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes></>
   )
 }

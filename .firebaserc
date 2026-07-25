@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "reena-dashboard"
-  }
+  },
+  "targets": {
+    "reena-dashboard": {
+      "hosting": {
+        "app": [
+          "reena-biscuit"
+        ],
+        "legacy": [
+          "reena-dashboard"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
