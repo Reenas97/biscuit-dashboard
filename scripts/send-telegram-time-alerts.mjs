@@ -74,7 +74,7 @@ for (const entry of automaticPauses) {
     `Motivo: ${entry.pauseReason ?? 'inatividade detectada'}.`,
     '',
     'Abrir o dashboard:',
-    'https://reena-dashboard.web.app/',
+    'https://reena-biscuit.web.app/dashboard',
   ].join('\n')
 
   const response = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {

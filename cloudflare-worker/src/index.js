@@ -212,7 +212,7 @@ function buildDailyMessage({ tasks, projects, unavailableDays }) {
     unavailable.forEach((day) => lines.push(`• ${day.reason}`))
   }
 
-  lines.push('', '📅 Abrir planejamento:', 'https://reena-dashboard.web.app/planejamento', '', 'Tenha um lindo dia de criações! 🐱')
+  lines.push('', '📅 Abrir planejamento:', 'https://reena-biscuit.web.app/planejamento', '', 'Tenha um lindo dia de criações! 🐱')
   return lines.join('\n')
 }
 
@@ -260,7 +260,7 @@ async function checkInactiveTimer(env) {
       `Motivo: ${entry.pauseReason ?? 'inatividade detectada'}.`,
       '',
       'Abrir o dashboard:',
-      'https://reena-dashboard.web.app/',
+      'https://reena-biscuit.web.app/dashboard',
     ].join('\n')
     await sendTelegram(env, message)
     await firestore.patch(markerPath, { timeEntryId: entry.id, sentAt: new Date().toISOString() })

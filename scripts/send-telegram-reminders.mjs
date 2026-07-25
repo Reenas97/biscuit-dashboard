@@ -82,7 +82,7 @@ function buildMessage({ tasks, projects, unavailableDays }) {
   }
 
   lines.push('', '📅 Abrir planejamento:')
-  lines.push('https://reena-dashboard.web.app/planejamento')
+  lines.push('https://reena-biscuit.web.app/planejamento')
   lines.push('', 'Tenha um lindo dia de criações! 🐱')
   return lines.join('\n')
 }
