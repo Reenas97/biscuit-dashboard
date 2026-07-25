@@ -34,9 +34,9 @@ export function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
       <div className="landing-hero-copy">
         <span className="landing-eyebrow"><FaPaw /> FEITO À MÃO, FEITO COM AFETO</span>
         <h1>Peças personalizadas<br /><em>feitas com cuidado e carinho</em></h1>
-        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Peças artesanais em biscuit criadas para transformar momentos especiais em memórias que ficam.</p>
+        <p>Cada peça é feita totalmente à mão, com cuidado em cada detalhe, para transformar ideias e momentos especiais em lembranças cheias de afeto.</p>
         <div className="landing-hero-actions"><a className="landing-primary" href="#contato">Quero uma peça personalizada <FaArrowRight /></a><a className="landing-secondary" href="#servicos">Conheça o trabalho</a></div>
-        <div className="landing-trust"><span><FaRegStar /> Feito à mão</span><span><FaHeart /> Com carinho</span><span><FaPaw /> Exclusivo para você</span></div>
+        <div className="landing-trust"><span><FaRegStar /> Totalmente à mão</span><span><FaHeart /> Feito com carinho</span><span><FaPaw /> Exclusivo para você</span></div>
       </div>
       <div className="landing-hero-art" aria-label="Ilustração decorativa da identidade Reena Biscuit">
         <div className="landing-art-orbit orbit-one"><FaPaw /></div><div className="landing-art-orbit orbit-two"><FaHeart /></div>
@@ -47,7 +47,7 @@ export function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
 
     <section className="landing-intro" id="sobre">
       <div><span className="landing-eyebrow">NOSSO ATELIÊ</span><h2>Onde cada detalhe<br />nasce com <em>carinho</em></h2></div>
-      <div><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p><a href="#processo">Conheça o processo <FaArrowRight /></a></div>
+      <div><p>Ao apoiar o trabalho artesanal, você valoriza o cuidado, o carinho e o tempo que coloco em cada peça. Da escolha das cores aos pequenos acabamentos, tudo passa pelas minhas mãos.</p><p>Por isso, cada criação tem seu próprio jeitinho: ela nasce da sua ideia e ganha forma aos poucos, com atenção e afeto em todas as etapas.</p><a href="#processo">Conheça o processo <FaArrowRight /></a></div>
     </section>
 
     <section className="landing-services" id="servicos">
