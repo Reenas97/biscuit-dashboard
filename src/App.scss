@@ -789,7 +789,7 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .landing-section-heading { max-width: 700px; margin: 0 auto; text-align: center; }
 .landing-section-heading .landing-eyebrow { justify-content: center; }
 .landing-section-heading > p { max-width: 540px; margin: 21px auto 0; color: $muted; font-size: 12px; line-height: 1.75; }
-.landing-service-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 17px; margin-top: 48px; }
+.landing-service-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 17px; margin-top: 48px; }
 .landing-service-grid article { min-height: 310px; padding: 31px; border: 1px solid $line; border-radius: 22px; background: rgba(#fffafa, .92); box-shadow: 0 12px 32px rgba($brown, .05); transition: transform 180ms ease, box-shadow 180ms ease; }
 .landing-service-grid article:hover { transform: translateY(-5px); box-shadow: 0 18px 40px rgba($brown, .1); }
 .landing-service-grid article > div { width: 58px; height: 58px; display: grid; place-items: center; margin-bottom: 28px; border-radius: 50%; background: $blush; color: $brown; font-size: 23px; }
@@ -832,7 +832,6 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
   .landing-hero-art { width: min(440px, 86vw); justify-self: center; margin-top: 20px; }
   .landing-intro, .landing-process, .landing-cta { grid-template-columns: 1fr; gap: 45px; }
   .landing-service-grid { grid-template-columns: 1fr 1fr; }
-  .landing-service-grid article:last-child { grid-column: 1 / -1; }
 }
 
 @media (max-width: 600px) {
@@ -847,7 +846,6 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
   .landing-intro { width: calc(100% - 40px); grid-template-columns: 1fr; gap: 30px; padding: 75px 0; }
   .landing-services, .landing-process, .landing-testimonial, .landing-cta { padding: 75px 20px; }
   .landing-service-grid { grid-template-columns: 1fr; margin-top: 35px; }
-  .landing-service-grid article:last-child { grid-column: auto; }
   .landing-process { gap: 30px; }
   .landing-footer { align-items: flex-start; flex-direction: column; padding-top: 35px; padding-bottom: 35px; }
 }

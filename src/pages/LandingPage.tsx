@@ -4,9 +4,10 @@ import { FaArrowRight, FaBars, FaCat, FaHeart, FaInstagram, FaPaw, FaQuoteLeft, 
 import logo from '../assets/reena-biscuit-logo.png'
 
 const services = [
-  { icon: FaCat, title: 'Peças personalizadas', text: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Feitas com carinho para contar histórias.' },
-  { icon: FaHeart, title: 'Presentes afetivos', text: 'Sed do eiusmod tempor incididunt ut labore. Uma lembrança delicada para momentos inesquecíveis.' },
-  { icon: FaWandMagicSparkles, title: 'Detalhes únicos', text: 'Ut enim ad minim veniam, quis nostrud exercitation. Cada detalhe pensado especialmente para você.' },
+  { icon: FaRegStar, title: 'Reena POP', text: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Uma versão cheia de personalidade e detalhes.' },
+  { icon: FaCat, title: 'Reena Chibi', text: 'Sed do eiusmod tempor incididunt ut labore. Traços delicados em um estilo fofo e expressivo.' },
+  { icon: FaWandMagicSparkles, title: 'Reena Anime', text: 'Ut enim ad minim veniam, quis nostrud exercitation. Personagens modelados à mão com cuidado.' },
+  { icon: FaHeart, title: 'Noivinhos', text: 'Duis aute irure dolor in reprehenderit. Uma lembrança personalizada para celebrar esse momento.' },
 ]
 
 const steps = [
