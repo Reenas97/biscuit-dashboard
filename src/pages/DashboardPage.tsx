@@ -65,10 +65,12 @@ export function DashboardPage() {
   const [now, setNow] = useState(() => Date.now())
   const today = dateKey(new Date())
   const activeProjects = projects.filter((project) => project.status !== 'Entregue')
+  const timerProjects = projects.filter((project) => project.status !== 'Pronto' && project.status !== 'Entregue')
   const datedProjects = activeProjects.filter((project) => project.deadline).sort((a, b) => a.deadline.localeCompare(b.deadline))
   const overdueProjects = datedProjects.filter((project) => project.deadline < today)
   const nextProject = datedProjects.find((project) => project.deadline >= today) ?? overdueProjects[0]
   const pendingTasks = tasks.filter((task) => !task.completed).sort((a, b) => a.date.localeCompare(b.date))
+  const overdueTasks = pendingTasks.filter((task) => task.date && task.date < today)
   const lowStock = materials.filter((material) => material.stock <= material.minimumStock)
   const nextUnavailable = unavailable.filter((item) => item.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0]
   const currentGoal = goals.find((goal) => goal.current < goal.target) ?? goals[0]
@@ -139,12 +141,12 @@ export function DashboardPage() {
     <div className="summary-grid dashboard-summary mt-[18px]">
       <Link to="/projetos"><span>Projetos ativos</span><strong>{activeProjects.length}</strong><small>{overdueProjects.length ? `${overdueProjects.length} com prazo atrasado` : 'Produção em andamento'}</small></Link>
       <Link to="/clientes"><span>Clientes</span><strong>{clients.length}</strong><small>Contatos cadastrados</small></Link>
-      <Link to="/planejamento"><span>Tarefas pendentes</span><strong>{pendingTasks.length}</strong><small>{pendingTasks.length ? 'Itens no planejamento' : 'Tudo em dia por aqui'}</small></Link>
+      <Link className={overdueTasks.length ? 'summary-warning' : ''} to="/planejamento"><span>{overdueTasks.length ? 'Tarefas atrasadas' : 'Tarefas pendentes'}</span><strong>{overdueTasks.length || pendingTasks.length}</strong><small>{overdueTasks.length ? 'Precisam da sua atenção' : pendingTasks.length ? 'Itens no planejamento' : 'Tudo em dia por aqui'}</small></Link>
       <Link to="/materiais"><span>Estoque baixo</span><strong>{lowStock.length}</strong><small>{lowStock.length ? 'Materiais para repor' : 'Estoque saudável'}</small></Link>
     </div>
 
     <section className="dashboard-timer mt-[18px]">
-      <div className="dashboard-timer-heading"><div><span className="section-kicker"><FaClock /> TRABALHANDO AGORA</span><h3>{activeProject ? activeProject.title : 'Nenhum projeto sendo tocado no momento'}</h3><p>{activeEntry ? `Tempo total: ${formatDuration(activeProjectSeconds)} · Mão de obra acumulada: ${formatLaborValue(activeProjectSeconds, settings.hourlyRate)}` : 'Escolha um projeto para começar a contabilizar o tempo e o valor da peça.'}</p></div>{activeEntry ? <button className="timer-stop" onClick={stopTimer} type="button"><FaPause /> Pausar</button> : <div className="timer-start"><select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} aria-label="Projeto em produção"><option value="">Selecione um projeto...</option>{activeProjects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select><button disabled={!selectedProjectId} onClick={startTimer} type="button"><FaPlay /> Iniciar</button></div>}</div>
+      <div className="dashboard-timer-heading"><div><span className="section-kicker"><FaClock /> TRABALHANDO AGORA</span><h3>{activeProject ? activeProject.title : 'Nenhum projeto sendo tocado no momento'}</h3><p>{activeEntry ? `Tempo total: ${formatDuration(activeProjectSeconds)} · Mão de obra acumulada: ${formatLaborValue(activeProjectSeconds, settings.hourlyRate)}` : 'Escolha um projeto para começar a contabilizar o tempo e o valor da peça.'}</p></div>{activeEntry ? <button className="timer-stop" onClick={stopTimer} type="button"><FaPause /> Pausar</button> : <div className="timer-start"><select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} aria-label="Projeto em produção"><option value="">Selecione um projeto...</option>{timerProjects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select><button disabled={!selectedProjectId} onClick={startTimer} type="button"><FaPlay /> Iniciar</button></div>}</div>
       {projectsWithTime.length > 0 && <div className="dashboard-time-totals">{projectsWithTime.slice(0, 4).map(({ project, seconds }) => <div key={project.id}><span>{project.title}</span><strong>{formatDuration(seconds)}</strong><small>{formatLaborValue(seconds, settings.hourlyRate)} de mão de obra</small></div>)}</div>}
       {timerPermissionMessage && <p className="timer-permission-message">{timerPermissionMessage}</p>}
     </section>

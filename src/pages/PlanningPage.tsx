@@ -98,7 +98,7 @@ export function PlanningPage() {
             <span className="calendar-number">{day.getDate()}</span>
             <div className="calendar-events">
               {events.projects.slice(0, 2).map((project) => <Link className="calendar-event project" to="/projetos" key={project.id} title={project.title}>{project.title}</Link>)}
-              {events.tasks.slice(0, 2).map((task) => <button className={task.completed ? 'calendar-event task completed' : 'calendar-event task'} onClick={() => saveTasks(tasks.map((item) => item.id === task.id ? { ...item, completed: !item.completed } : item))} type="button" key={task.id} title={task.title}>{task.title}</button>)}
+              {events.tasks.slice(0, 2).map((task) => <button className={`calendar-event task${task.completed ? ' completed' : task.date < today ? ' late' : ''}`} onClick={() => saveTasks(tasks.map((item) => item.id === task.id ? { ...item, completed: !item.completed } : item))} type="button" key={task.id} title={task.date < today && !task.completed ? `Tarefa atrasada: ${task.title}` : task.title}>{task.title}</button>)}
               {events.unavailable.slice(0, 1).map((item) => <span className="calendar-event unavailable" key={item.id} title={`Indisponível: ${item.reason}`}><FaBan /> {item.reason}</span>)}
               {events.projects.length + events.tasks.length + events.unavailable.length > 5 && <small>+{events.projects.length + events.tasks.length + events.unavailable.length - 5}</small>}
             </div>

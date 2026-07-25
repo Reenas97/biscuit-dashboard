@@ -30,7 +30,7 @@ import {
   FaXmark,
 } from 'react-icons/fa6'
 
-const statuses = ['Planejamento', 'Modelagem', 'Secagem', 'Pintura', 'Finalização', 'Pronto', 'Entregue'] as const
+const statuses = ['Planejamento', 'Modelagem', 'Secagem', 'Pintura', 'Finalização', 'Envernização', 'Pronto', 'Entregue'] as const
 type ProjectStatus = typeof statuses[number]
 
 type Project = {
