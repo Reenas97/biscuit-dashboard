@@ -22,7 +22,7 @@ export function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
 
   return <main className="landing-page">
     <header className="landing-header">
-      <Link className="landing-brand" to="/" aria-label="Reena Biscuit — início"><img src={logo} alt="" /><span><strong>Reena Biscuit</strong><small>Arte que ganha forma e afeto</small></span></Link>
+      <Link className="landing-brand" to="/" aria-label="Reena Biscuit — início"><img src={logo} alt="" /><span><strong>Reena Biscuit</strong><small>Onde a imaginação ganha forma</small></span></Link>
       <button className="landing-menu-button" onClick={() => setMenuOpen(!menuOpen)} type="button" aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}>{menuOpen ? <FaXmark /> : <FaBars />}</button>
       <nav className={menuOpen ? 'landing-nav open' : 'landing-nav'} aria-label="Navegação da página">
         <a href="#sobre" onClick={closeMenu}>Sobre</a><a href="#servicos" onClick={closeMenu}>Criações</a><a href="#processo" onClick={closeMenu}>Como funciona</a><a href="#contato" onClick={closeMenu}>Contato</a>
@@ -67,6 +67,6 @@ export function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
       <div className="landing-contact-card"><FaInstagram /><span><strong>Fale com a Reena Biscuit</strong><small>Em breve, seu Instagram e WhatsApp aparecerão aqui.</small></span><FaArrowRight /></div>
     </section>
 
-    <footer className="landing-footer"><Link className="landing-brand" to="/"><img src={logo} alt="" /><span><strong>Reena Biscuit</strong><small>Arte que ganha forma e afeto</small></span></Link><p>© {new Date().getFullYear()} Reena Biscuit. Lorem ipsum dolor sit amet.</p><Link to={isLoggedIn ? '/dashboard' : '/login'}>{isLoggedIn ? 'Dashboard' : 'Área da artesã'}</Link></footer>
+    <footer className="landing-footer"><Link className="landing-brand" to="/"><img src={logo} alt="" /><span><strong>Reena Biscuit</strong><small>Onde a imaginação ganha forma</small></span></Link><p>© {new Date().getFullYear()} Reena Biscuit. Lorem ipsum dolor sit amet.</p><Link to={isLoggedIn ? '/dashboard' : '/login'}>{isLoggedIn ? 'Dashboard' : 'Área da artesã'}</Link></footer>
   </main>
 }
