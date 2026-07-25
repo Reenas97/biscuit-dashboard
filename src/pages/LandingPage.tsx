@@ -34,7 +34,7 @@ export function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
       <div className="landing-hero-copy">
         <span className="landing-eyebrow"><FaPaw /> FEITO À MÃO, FEITO COM AFETO</span>
         <h1>Peças personalizadas<br /><em>feitas com cuidado e carinho</em></h1>
-        <p>Cada peça é feita totalmente à mão, com cuidado em cada detalhe, para transformar ideias e momentos especiais em lembranças cheias de afeto.</p>
+        <p>Cada peça é modelada totalmente à mão, com atenção a cada detalhe, para dar forma a ideias e momentos especiais.</p>
         <div className="landing-hero-actions"><a className="landing-primary" href="#contato">Quero uma peça personalizada <FaArrowRight /></a><a className="landing-secondary" href="#servicos">Conheça o trabalho</a></div>
         <div className="landing-trust"><span><FaRegStar /> Totalmente à mão</span><span><FaHeart /> Feito com carinho</span><span><FaPaw /> Exclusivo para você</span></div>
       </div>
