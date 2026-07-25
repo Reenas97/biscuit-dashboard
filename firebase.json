@@ -29,7 +29,7 @@
       "redirects": [
         {
           "source": "/",
-          "destination": "https://reena-biscuit.web.app/dashboard",
+          "destination": "https://reena-biscuit.web.app/",
           "type": 301
         },
         {

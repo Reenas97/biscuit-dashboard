@@ -9,18 +9,18 @@ import { PlanningPage } from './pages/PlanningPage'
 import { GoalsPage } from './pages/GoalsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { LoginPage } from './pages/LoginPage'
+import { LandingPage } from './pages/LandingPage'
 import { useAuth } from './auth/AuthContext'
 import { TimeTrackingGuard } from './components/TimeTrackingGuard'
 import './App.scss'
 
 function App() {
   const { user, loading } = useAuth()
-  if (loading) return <div className="auth-loading"><span /><p>Preparando seu ateliê...</p></div>
-  if (!user) return <LoginPage />
   return (
-    <><TimeTrackingGuard /><Routes>
-      <Route element={<AppLayout />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
+    <>{user && <TimeTrackingGuard />}<Routes>
+      <Route index element={<LandingPage isLoggedIn={Boolean(user)} />} />
+      <Route path="login" element={loading ? <div className="auth-loading"><span /><p>Preparando seu ateliê...</p></div> : user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+      <Route element={loading ? <div className="auth-loading"><span /><p>Preparando seu ateliê...</p></div> : user ? <AppLayout /> : <Navigate to="/login" replace />}>
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="ideias" element={<IdeasPage />} />
         <Route path="projetos" element={<ProjectsPage />} />
@@ -30,7 +30,7 @@ function App() {
         <Route path="metas" element={<GoalsPage />} />
         <Route path="configuracoes" element={<SettingsPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes></>
   )
 }

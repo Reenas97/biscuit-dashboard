@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /ideias
+Disallow: /projetos
+Disallow: /clientes
+Disallow: /planejamento
+Disallow: /materiais
+Disallow: /metas
+Disallow: /configuracoes
+
+Sitemap: https://reena-biscuit.web.app/sitemap.xml
