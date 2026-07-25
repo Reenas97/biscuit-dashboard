@@ -33,7 +33,7 @@ export function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
     <section className="landing-hero">
       <div className="landing-hero-copy">
         <span className="landing-eyebrow"><FaPaw /> FEITO À MÃO, FEITO COM AFETO</span>
-        <h1>Pequenos detalhes.<br /><em>Grandes histórias.</em></h1>
+        <h1>Peças personalizadas<br /><em>feitas com cuidado e carinho</em></h1>
         <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Peças artesanais em biscuit criadas para transformar momentos especiais em memórias que ficam.</p>
         <div className="landing-hero-actions"><a className="landing-primary" href="#contato">Quero uma peça personalizada <FaArrowRight /></a><a className="landing-secondary" href="#servicos">Conheça o trabalho</a></div>
         <div className="landing-trust"><span><FaRegStar /> Feito à mão</span><span><FaHeart /> Com carinho</span><span><FaPaw /> Exclusivo para você</span></div>
