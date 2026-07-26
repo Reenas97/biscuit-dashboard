@@ -185,6 +185,12 @@ async function sendTelegram(env, text) {
 function buildDailyMessage({ tasks, projects, unavailableDays }) {
   const today = localDate()
   const todayTasks = tasks.filter((task) => task.date === today && !task.completed)
+  const overdueTasks = tasks
+    .filter((task) => task.date && task.date < today && !task.completed)
+    .sort((first, second) => first.date.localeCompare(second.date))
+  const overdueProjects = projects
+    .filter((project) => project.deadline && project.deadline < today && project.status !== 'Entregue')
+    .sort((first, second) => first.deadline.localeCompare(second.deadline))
   const upcomingProjects = projects
     .filter((project) => project.deadline && project.status !== 'Entregue')
     .map((project) => ({ ...project, days: daysFromToday(project.deadline) }))
@@ -192,6 +198,20 @@ function buildDailyMessage({ tasks, projects, unavailableDays }) {
     .sort((first, second) => first.deadline.localeCompare(second.deadline))
   const unavailable = unavailableDays.filter((day) => day.date === today)
   const lines = ['🐾 Bom dia! Aqui está o cronograma da Reena Biscuit:']
+
+  lines.push('', '🚨 O que está atrasado')
+  if (overdueTasks.length === 0 && overdueProjects.length === 0) lines.push('• Nada atrasado. Tudo em dia por aqui! ✨')
+  else {
+    overdueTasks.forEach((task) => {
+      const project = projects.find((item) => item.id === task.projectId)
+      const lateDays = Math.abs(daysFromToday(task.date))
+      lines.push(`• Tarefa: ${task.title} — ${formatDate(task.date)} (${lateDays} ${lateDays === 1 ? 'dia' : 'dias'} de atraso)${project ? ` — Projeto: ${project.title}` : ''}`)
+    })
+    overdueProjects.forEach((project) => {
+      const lateDays = Math.abs(daysFromToday(project.deadline))
+      lines.push(`• Projeto: ${project.title} — prazo ${formatDate(project.deadline)} (${lateDays} ${lateDays === 1 ? 'dia' : 'dias'} de atraso)`)
+    })
+  }
 
   lines.push('', '📋 Tarefas de hoje')
   if (todayTasks.length === 0) lines.push('• Nenhuma tarefa pendente.')
