@@ -568,6 +568,7 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .tasks-heading { display: flex; align-items: flex-end; justify-content: space-between; }
 .tasks-heading > strong { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; background: $blush; color: $dark-brown; font-size: 9px; }
 .task-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 9px; border-radius: 10px; background: $cream; }
+.task-row.late { border: 1px solid rgba(#c94c5b, .48); background: rgba(#fff0f1, .9); }
 .task-row.completed > span { opacity: .55; text-decoration: line-through; }
 .task-check { width: 21px; height: 21px; display: grid; place-items: center; border: 1px solid $blush; border-radius: 6px; background: $paper; color: $brown; font-size: 9px; cursor: pointer; }
 .task-row-actions { display: flex; align-items: center; gap: 2px; }

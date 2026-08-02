@@ -9,7 +9,7 @@ import { sendTimerHeartbeat, stopTimerHeartbeat } from '../lib/timerHeartbeat'
 type StoredIdea = { id: string }
 type StoredProject = { id: string; title: string; deadline: string; status: string; type: string; client?: string }
 type StoredClient = { id: string }
-type StoredTask = { id: string; title: string; date: string; completed: boolean; priority: string }
+type StoredTask = { id: string; title: string; date: string; endDate?: string; completed: boolean; priority: string }
 type StoredMaterial = { id: string; name: string; stock: number; minimumStock: number; unit: string }
 type StoredGoal = { id: string; title: string; target: number; current: number; unit: string; deadline: string }
 type StoredUnavailable = { id: string; date: string; reason: string }
@@ -69,8 +69,8 @@ export function DashboardPage() {
   const datedProjects = activeProjects.filter((project) => project.deadline).sort((a, b) => a.deadline.localeCompare(b.deadline))
   const overdueProjects = datedProjects.filter((project) => project.deadline < today)
   const nextProject = datedProjects.find((project) => project.deadline >= today) ?? overdueProjects[0]
-  const pendingTasks = tasks.filter((task) => !task.completed).sort((a, b) => a.date.localeCompare(b.date))
-  const overdueTasks = pendingTasks.filter((task) => task.date && task.date < today)
+  const pendingTasks = tasks.filter((task) => !task.completed).sort((a, b) => (a.endDate || a.date).localeCompare(b.endDate || b.date))
+  const overdueTasks = pendingTasks.filter((task) => task.date && (task.endDate || task.date) < today)
   const lowStock = materials.filter((material) => material.stock <= material.minimumStock)
   const nextUnavailable = unavailable.filter((item) => item.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0]
   const currentGoal = goals.find((goal) => goal.current < goal.target) ?? goals[0]
@@ -157,7 +157,7 @@ export function DashboardPage() {
         {nextProject ? <div className={nextProject.deadline < today ? 'dashboard-next-project overdue' : 'dashboard-next-project'}><div className="next-project-icon"><FaCalendarDays /></div><div><span>{nextProject.deadline < today ? 'PRAZO ATRASADO' : nextProject.type}</span><h3>{nextProject.title}</h3><p>{new Date(`${nextProject.deadline}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}{nextProject.client ? ` · ${nextProject.client}` : ''}</p></div><Link to="/projetos">Abrir <FaArrowRight /></Link></div> : <div className="dashboard-inline-empty"><FaPaw /><span><strong>Nenhuma entrega agendada</strong><small>Crie um projeto com prazo para acompanhar aqui.</small></span></div>}
 
         <div className="dashboard-lists">
-          <div><div className="dashboard-mini-heading"><span><FaClipboardCheck /> Próximas tarefas</span><Link to="/planejamento">Planejamento</Link></div>{pendingTasks.length ? <div className="dashboard-task-list">{pendingTasks.slice(0, 4).map((task) => <div key={task.id}><span className={`dashboard-priority priority-${task.priority.toLocaleLowerCase('pt-BR')}`} /><strong>{task.title}</strong><time>{task.date ? new Date(`${task.date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : 'Sem data'}</time></div>)}</div> : <p className="dashboard-muted">Nenhuma tarefa pendente.</p>}</div>
+          <div><div className="dashboard-mini-heading"><span><FaClipboardCheck /> Próximas tarefas</span><Link to="/planejamento">Planejamento</Link></div>{pendingTasks.length ? <div className="dashboard-task-list">{pendingTasks.slice(0, 4).map((task) => <div key={task.id}><span className={`dashboard-priority priority-${task.priority.toLocaleLowerCase('pt-BR')}`} /><strong>{task.title}</strong><time>{task.date ? `${new Date(`${task.date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}${task.endDate && task.endDate !== task.date ? ` – ${new Date(`${task.endDate}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}` : ''}` : 'Sem data'}</time></div>)}</div> : <p className="dashboard-muted">Nenhuma tarefa pendente.</p>}</div>
           <div><div className="dashboard-mini-heading"><span><FaBoxesStacked /> Estoque</span><Link to="/materiais">Materiais</Link></div>{lowStock.length ? <div className="dashboard-stock-list">{lowStock.slice(0, 4).map((material) => <div key={material.id}><FaTriangleExclamation /><span><strong>{material.name}</strong><small>{material.stock.toLocaleString('pt-BR')} {material.unit} disponíveis</small></span></div>)}</div> : <p className="dashboard-muted">Nenhum material com estoque baixo.</p>}</div>
         </div>
       </section>

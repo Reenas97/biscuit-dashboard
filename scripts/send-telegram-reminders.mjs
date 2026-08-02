@@ -50,12 +50,21 @@ function formatDate(date) {
   }).format(new Date(`${date}T12:00:00-03:00`))
 }
 
+function taskEndDate(task) {
+  return task.endDate || task.date
+}
+
+function formatTaskPeriod(task) {
+  const end = taskEndDate(task)
+  return end !== task.date ? `${formatDate(task.date)} a ${formatDate(end)}` : formatDate(task.date)
+}
+
 function buildMessage({ tasks, projects, unavailableDays }) {
   const today = localDate()
-  const todayTasks = tasks.filter((task) => task.date === today && !task.completed)
+  const todayTasks = tasks.filter((task) => task.date <= today && taskEndDate(task) >= today && !task.completed)
   const overdueTasks = tasks
-    .filter((task) => task.date && task.date < today && !task.completed)
-    .sort((first, second) => first.date.localeCompare(second.date))
+    .filter((task) => task.date && taskEndDate(task) < today && !task.completed)
+    .sort((first, second) => taskEndDate(first).localeCompare(taskEndDate(second)))
   const overdueProjects = projects
     .filter((project) => project.deadline && project.deadline < today && project.status !== 'Entregue')
     .sort((first, second) => first.deadline.localeCompare(second.deadline))
@@ -73,8 +82,8 @@ function buildMessage({ tasks, projects, unavailableDays }) {
   else {
     overdueTasks.forEach((task) => {
       const project = projects.find((item) => item.id === task.projectId)
-      const lateDays = Math.abs(daysFromToday(task.date))
-      lines.push(`• Tarefa: ${task.title} — ${formatDate(task.date)} (${lateDays} ${lateDays === 1 ? 'dia' : 'dias'} de atraso)${project ? ` — Projeto: ${project.title}` : ''}`)
+      const lateDays = Math.abs(daysFromToday(taskEndDate(task)))
+      lines.push(`• Tarefa: ${task.title} — ${formatTaskPeriod(task)} (${lateDays} ${lateDays === 1 ? 'dia' : 'dias'} de atraso)${project ? ` — Projeto: ${project.title}` : ''}`)
     })
     overdueProjects.forEach((project) => {
       const lateDays = Math.abs(daysFromToday(project.deadline))
@@ -86,7 +95,7 @@ function buildMessage({ tasks, projects, unavailableDays }) {
   if (todayTasks.length === 0) lines.push('• Nenhuma tarefa pendente.')
   else todayTasks.forEach((task) => {
     const project = projects.find((item) => item.id === task.projectId)
-    lines.push(`• ${task.title} (${task.priority})${project ? ` — Projeto: ${project.title}` : ''}`)
+    lines.push(`• ${task.title} (${task.priority}) — ${formatTaskPeriod(task)}${project ? ` — Projeto: ${project.title}` : ''}`)
   })
 
   lines.push('', '🎀 Prazos dos próximos 7 dias')
