@@ -45,6 +45,7 @@ export function PlanningPage() {
   const [form, setForm] = useState<TaskForm | null>(null)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [unavailableForm, setUnavailableForm] = useState<UnavailableForm | null>(null)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const today = dateKey(new Date())
 
   const days = useMemo(() => {
@@ -88,7 +89,15 @@ export function PlanningPage() {
     return { projects: projects.filter((project) => project.deadline === key), tasks: tasks.filter((task) => task.date <= key && taskEndDate(task) >= key), unavailable: unavailableDays.filter((item) => item.date === key) }
   }
 
+  const selectedEvents = selectedDate ? eventsFor(parseDate(selectedDate)) : null
+
   return <div className="planning-page">
+    {selectedDate && selectedEvents && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedDate(null) }}><section className="idea-modal day-details-modal" role="dialog" aria-modal="true" aria-labelledby="day-details-title"><div className="modal-heading"><div><span className="section-kicker"><FaCalendarDay /> AGENDA DO DIA</span><h2 id="day-details-title">{parseDate(selectedDate).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</h2></div><button onClick={() => setSelectedDate(null)} type="button" aria-label="Fechar agenda do dia"><FaXmark /></button></div><div className="day-details-list">
+      {selectedEvents.tasks.map((task) => { const linkedProject = projects.find((project) => project.id === task.projectId); return <article className={`day-detail-item task${task.completed ? ' completed' : taskEndDate(task) < today ? ' late' : ''}`} key={`task-${task.id}`}><div className="day-detail-icon"><FaClipboardCheck /></div><span><small>TAREFA · {task.priority}</small><strong>{task.title}</strong><p>{formatTaskPeriod(task)}{linkedProject ? ` · Projeto: ${linkedProject.title}` : ''}</p></span><button onClick={() => { setSelectedDate(null); editTask(task) }} type="button"><FaPen /> Editar</button></article> })}
+      {selectedEvents.projects.map((project) => <article className="day-detail-item project" key={`project-${project.id}`}><div className="day-detail-icon"><FaCalendarDay /></div><span><small>ENTREGA DE PROJETO</small><strong>{project.title}</strong><p>{project.client || 'Projeto pessoal'} · {project.status}</p></span><Link to="/projetos">Abrir <FaArrowRight /></Link></article>)}
+      {selectedEvents.unavailable.map((item) => <article className="day-detail-item unavailable" key={`unavailable-${item.id}`}><div className="day-detail-icon"><FaBan /></div><span><small>DIA INDISPONÍVEL</small><strong>{item.reason}</strong></span></article>)}
+      {selectedEvents.tasks.length + selectedEvents.projects.length + selectedEvents.unavailable.length === 0 && <div className="day-details-empty"><FaCalendarDay /><strong>Nada planejado para este dia</strong><p>Você pode adicionar uma nova tarefa ou bloquear a data como indisponível.</p><button onClick={() => { setForm({ ...emptyTask, date: selectedDate, endDate: selectedDate }); setEditingTaskId(null); setSelectedDate(null) }} type="button"><FaPlus /> Adicionar tarefa</button></div>}
+    </div></section></div>}
     <div className="ideas-heading flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
       <div className="min-w-0 flex-1"><span className="section-kicker"><FaCalendarDay /> ROTINA DO ATELIÊ</span><h2>Planeje com leveza</h2><p>Reúna prazos de encomendas e tarefas para organizar seus dias de produção.</p></div>
       <div className="planning-actions"><button className="secondary-button" onClick={() => setUnavailableForm({ date: today, reason: '' })} type="button"><FaBan /> Dia indisponível</button><button className="primary-button shrink-0" onClick={() => { setEditingTaskId(null); setForm({ ...emptyTask, date: today, endDate: today }) }} type="button"><FaPlus /> Nova tarefa</button></div>
@@ -100,11 +109,11 @@ export function PlanningPage() {
         <div className="calendar-grid calendar-weekdays">{weekDays.map((day) => <span key={day}>{day}</span>)}</div>
         <div className="calendar-grid calendar-days">{days.map((day) => {
           const key = dateKey(day); const events = eventsFor(day); const outside = day.getMonth() !== month.getMonth()
-          return <div className={`${outside ? 'calendar-day outside' : 'calendar-day'}${key === today ? ' today' : ''}`} key={key}>
+          return <div className={`${outside ? 'calendar-day outside' : 'calendar-day'}${key === today ? ' today' : ''}`} key={key} onClick={() => setSelectedDate(key)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setSelectedDate(key) }} role="button" tabIndex={0} aria-label={`Ver compromissos de ${day.toLocaleDateString('pt-BR')}`}>
             <span className="calendar-number">{day.getDate()}</span>
             <div className="calendar-events">
-              {events.projects.slice(0, 2).map((project) => <Link className="calendar-event project" to="/projetos" key={project.id} title={project.title}>{project.title}</Link>)}
-              {events.tasks.slice(0, 2).map((task) => <button className={`calendar-event task${task.completed ? ' completed' : taskEndDate(task) < today ? ' late' : ''}`} onClick={() => saveTasks(tasks.map((item) => item.id === task.id ? { ...item, completed: !item.completed } : item))} type="button" key={task.id} title={`${taskEndDate(task) < today && !task.completed ? 'Tarefa atrasada: ' : ''}${task.title} · ${formatTaskPeriod(task)}`}>{task.title}</button>)}
+              {events.projects.slice(0, 2).map((project) => <Link className="calendar-event project" to="/projetos" onClick={(event) => event.stopPropagation()} key={project.id} title={project.title}>{project.title}</Link>)}
+              {events.tasks.slice(0, 2).map((task) => <button className={`calendar-event task${task.completed ? ' completed' : taskEndDate(task) < today ? ' late' : ''}`} onClick={(event) => { event.stopPropagation(); saveTasks(tasks.map((item) => item.id === task.id ? { ...item, completed: !item.completed } : item)) }} type="button" key={task.id} title={`${taskEndDate(task) < today && !task.completed ? 'Tarefa atrasada: ' : ''}${task.title} · ${formatTaskPeriod(task)}`}>{task.title}</button>)}
               {events.unavailable.slice(0, 1).map((item) => <span className="calendar-event unavailable" key={item.id} title={`Indisponível: ${item.reason}`}><FaBan /> {item.reason}</span>)}
               {events.projects.length + events.tasks.length + events.unavailable.length > 5 && <small>+{events.projects.length + events.tasks.length + events.unavailable.length - 5}</small>}
             </div>
