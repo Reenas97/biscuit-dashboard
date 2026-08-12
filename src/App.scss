@@ -551,6 +551,7 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .calendar-events { display: grid; gap: 3px; margin-top: 3px; }
 .calendar-event { width: 100%; overflow: hidden; display: block; padding: 4px 5px; border: 0; border-radius: 5px; color: $dark-brown; font-size: 7px; line-height: 1.25; text-align: left; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .calendar-event.project { background: $blush; }
+.calendar-event.project.finished { background: #cfe8d6; color: #376849; font-weight: 800; }
 .calendar-event.task { background: color.mix($cream, #d9b77b, 70%); }
 .calendar-event.task.late { background: #c94c5b; color: white; font-weight: 800; }
 .calendar-event.unavailable { display: flex; align-items: center; gap: 3px; background: color.mix($cream, $dark-brown, 82%); color: $dark-brown; cursor: default; }
@@ -594,6 +595,8 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .day-detail-item.completed { opacity: .58; }
 .day-detail-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; background: $blush; color: $brown; }
 .day-detail-item.project .day-detail-icon { background: color.mix($blush, $pink, 72%); }
+.day-detail-item.project.finished { border-color: rgba(#568264, .38); background: #eff8f1; }
+.day-detail-item.project.finished .day-detail-icon { background: #cfe8d6; color: #376849; }
 .day-detail-item.unavailable .day-detail-icon { background: color.mix($cream, $dark-brown, 82%); }
 .day-detail-item > span { min-width: 0; display: grid; gap: 3px; }
 .day-detail-item small { color: $pink; font-size: 8px; font-weight: 800; letter-spacing: .07em; }

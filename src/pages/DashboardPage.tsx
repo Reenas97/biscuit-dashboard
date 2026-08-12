@@ -64,7 +64,7 @@ export function DashboardPage() {
   const [timerPermissionMessage, setTimerPermissionMessage] = useState('')
   const [now, setNow] = useState(() => Date.now())
   const today = dateKey(new Date())
-  const activeProjects = projects.filter((project) => project.status !== 'Entregue')
+  const activeProjects = projects.filter((project) => project.status !== 'Pronto' && project.status !== 'Entregue')
   const timerProjects = projects.filter((project) => project.status !== 'Pronto' && project.status !== 'Entregue')
   const datedProjects = activeProjects.filter((project) => project.deadline).sort((a, b) => a.deadline.localeCompare(b.deadline))
   const overdueProjects = datedProjects.filter((project) => project.deadline < today)

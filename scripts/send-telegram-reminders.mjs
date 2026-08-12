@@ -61,15 +61,16 @@ function formatTaskPeriod(task) {
 
 function buildMessage({ tasks, projects, unavailableDays }) {
   const today = localDate()
-  const todayTasks = tasks.filter((task) => task.date <= today && taskEndDate(task) >= today && !task.completed)
+  const finishedProjectIds = new Set(projects.filter((project) => project.status === 'Pronto' || project.status === 'Entregue').map((project) => project.id))
+  const todayTasks = tasks.filter((task) => task.date <= today && taskEndDate(task) >= today && !task.completed && !finishedProjectIds.has(task.projectId))
   const overdueTasks = tasks
-    .filter((task) => task.date && taskEndDate(task) < today && !task.completed)
+    .filter((task) => task.date && taskEndDate(task) < today && !task.completed && !finishedProjectIds.has(task.projectId))
     .sort((first, second) => taskEndDate(first).localeCompare(taskEndDate(second)))
   const overdueProjects = projects
-    .filter((project) => project.deadline && project.deadline < today && project.status !== 'Entregue')
+    .filter((project) => project.deadline && project.deadline < today && project.status !== 'Pronto' && project.status !== 'Entregue')
     .sort((first, second) => first.deadline.localeCompare(second.deadline))
   const upcomingProjects = projects
-    .filter((project) => project.deadline && project.status !== 'Entregue')
+    .filter((project) => project.deadline && project.status !== 'Pronto' && project.status !== 'Entregue')
     .map((project) => ({ ...project, days: daysFromToday(project.deadline) }))
     .filter((project) => project.days >= 0 && project.days <= 7)
     .sort((first, second) => first.deadline.localeCompare(second.deadline))
