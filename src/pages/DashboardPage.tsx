@@ -9,7 +9,7 @@ import { sendTimerHeartbeat, stopTimerHeartbeat } from '../lib/timerHeartbeat'
 type StoredIdea = { id: string }
 type StoredProject = { id: string; title: string; deadline: string; status: string; type: string; client?: string }
 type StoredClient = { id: string }
-type StoredTask = { id: string; title: string; date: string; endDate?: string; completed: boolean; priority: string }
+type StoredTask = { id: string; title: string; date: string; endDate?: string; projectId?: string; completed: boolean; priority: string }
 type StoredMaterial = { id: string; name: string; stock: number; minimumStock: number; unit: string }
 type StoredGoal = { id: string; title: string; target: number; current: number; unit: string; deadline: string }
 type StoredUnavailable = { id: string; date: string; reason: string }
@@ -64,13 +64,14 @@ export function DashboardPage() {
   const [timerPermissionMessage, setTimerPermissionMessage] = useState('')
   const [now, setNow] = useState(() => Date.now())
   const today = dateKey(new Date())
-  const activeProjects = projects.filter((project) => project.status !== 'Pronto' && project.status !== 'Entregue')
-  const timerProjects = projects.filter((project) => project.status !== 'Pronto' && project.status !== 'Entregue')
+  const activeProjects = projects.filter((project) => project.status !== 'Stand by' && project.status !== 'Pronto' && project.status !== 'Entregue')
+  const timerProjects = projects.filter((project) => project.status !== 'Stand by' && project.status !== 'Pronto' && project.status !== 'Entregue')
   const datedProjects = activeProjects.filter((project) => project.deadline).sort((a, b) => a.deadline.localeCompare(b.deadline))
   const overdueProjects = datedProjects.filter((project) => project.deadline < today)
   const nextProject = datedProjects.find((project) => project.deadline >= today) ?? overdueProjects[0]
   const pendingTasks = tasks.filter((task) => !task.completed).sort((a, b) => (a.endDate || a.date).localeCompare(b.endDate || b.date))
-  const overdueTasks = pendingTasks.filter((task) => task.date && (task.endDate || task.date) < today)
+  const inactiveProjectIds = new Set(projects.filter((project) => project.status === 'Stand by' || project.status === 'Pronto' || project.status === 'Entregue').map((project) => project.id))
+  const overdueTasks = pendingTasks.filter((task) => task.date && (task.endDate || task.date) < today && !inactiveProjectIds.has(task.projectId ?? ''))
   const lowStock = materials.filter((material) => material.stock <= material.minimumStock)
   const nextUnavailable = unavailable.filter((item) => item.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0]
   const currentGoal = goals.find((goal) => goal.current < goal.target) ?? goals[0]

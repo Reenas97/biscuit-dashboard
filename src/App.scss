@@ -496,6 +496,7 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .kanban-column-heading h3 { flex: 1; margin: 0; color: $dark-brown; font-size: 12px; font-weight: 750; }
 .kanban-column-heading strong { display: grid; place-items: center; min-width: 23px; height: 23px; padding: 0 6px; border-radius: 999px; background: $paper; color: $muted; font-size: 10px; }
 .kanban-status-dot { width: 10px; height: 10px; border-radius: 50%; background: $blush; }
+.kanban-status-dot.status--stand-by { background: #8b94a6; }
 .kanban-column-content { display: grid; align-content: start; gap: 10px; min-height: 415px; }
 .kanban-card { position: relative; z-index: 1; padding: 15px; border: 1px solid $line; border-radius: 13px; background: $paper; box-shadow: 0 7px 18px rgba($dark-brown, .07); transition: box-shadow 160ms ease, opacity 160ms ease; }
 .kanban-card.dragging { z-index: 10; opacity: .78; box-shadow: 0 18px 35px rgba($dark-brown, .22); }

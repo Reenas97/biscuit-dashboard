@@ -13,6 +13,7 @@ import {
 import type { DragEndEvent } from '@dnd-kit/core'
 import { ConfirmButton } from '../components/ConfirmButton'
 import { dataChangedEvent, saveLocalData } from '../lib/cloudData'
+import { stopTimerHeartbeat } from '../lib/timerHeartbeat'
 import { useAtelierSettings } from '../settings'
 import {
   FaArrowRight,
@@ -30,7 +31,7 @@ import {
   FaXmark,
 } from 'react-icons/fa6'
 
-const statuses = ['Planejamento', 'Modelagem', 'Secagem', 'Pintura', 'Finalização', 'Envernização', 'Pronto', 'Entregue'] as const
+const statuses = ['Planejamento', 'Stand by', 'Modelagem', 'Secagem', 'Pintura', 'Finalização', 'Envernização', 'Pronto', 'Entregue'] as const
 type ProjectStatus = typeof statuses[number]
 
 type Project = {
@@ -138,7 +139,7 @@ function KanbanColumn({ status, projects, onOpen }: { status: ProjectStatus; pro
   return (
     <section ref={setNodeRef} className={isOver ? 'kanban-column over' : 'kanban-column'}>
       <div className="kanban-column-heading">
-        <span className={`kanban-status-dot status--${status.toLowerCase()}`} />
+        <span className={`kanban-status-dot status--${status.toLocaleLowerCase('pt-BR').replace(/\s+/g, '-')}`} />
         <h3>{status}</h3>
         <strong>{projects.length}</strong>
       </div>
@@ -193,6 +194,17 @@ export function ProjectsPage() {
   function saveProjects(nextProjects: Project[]) {
     setProjects(nextProjects)
     saveLocalData(projectStorageKey, JSON.stringify(nextProjects))
+  }
+
+  function pauseProjectTimer(projectId: string, reason: string) {
+    const activeEntry = timeEntries.find((entry) => entry.projectId === projectId && !entry.endedAt)
+    if (!activeEntry) return
+    const endedAt = new Date().toISOString()
+    const nextEntries = timeEntries.map((entry) => entry.id === activeEntry.id ? { ...entry, endedAt, autoPaused: true, pauseReason: reason } : entry)
+    setTimeEntries(nextEntries)
+    saveLocalData(timeStorageKey, JSON.stringify(nextEntries))
+    localStorage.removeItem('reena-biscuit-timer-heartbeat')
+    stopTimerHeartbeat(reason).catch(() => undefined)
   }
 
   function saveMaterials(nextMaterials: Material[]) {
@@ -278,6 +290,7 @@ export function ProjectsPage() {
     }
 
     if (editingId) {
+      if (form.status === 'Stand by') pauseProjectTimer(editingId, 'Projeto colocado em Stand by')
       saveProjects(projects.map((project) => project.id === editingId ? { ...project, ...projectData } : project))
       setSelectedId(editingId)
     } else {
@@ -291,6 +304,7 @@ export function ProjectsPage() {
     if (!over) return
     const nextStatus = String(over.id) as ProjectStatus
     if (!statuses.includes(nextStatus)) return
+    if (nextStatus === 'Stand by') pauseProjectTimer(String(active.id), 'Projeto colocado em Stand by')
     saveProjects(projects.map((project) => project.id === active.id ? { ...project, status: nextStatus } : project))
   }
 
