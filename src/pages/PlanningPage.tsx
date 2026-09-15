@@ -62,6 +62,13 @@ export function PlanningPage() {
       .sort((first, second) => first.date.localeCompare(second.date))
   }, [month, tasks])
 
+  const monthUnavailableDays = useMemo(() => {
+    const monthPrefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
+    return unavailableDays
+      .filter((item) => item.date.startsWith(monthPrefix))
+      .sort((first, second) => first.date.localeCompare(second.date))
+  }, [month, unavailableDays])
+
   const upcoming = useMemo(() => {
     const projectEvents = projects.filter((project) => project.deadline && project.status !== 'Pronto' && project.status !== 'Entregue').map((project) => ({ id: `project-${project.id}`, title: project.title, date: project.deadline, kind: 'project' as const, completed: false }))
     const taskEvents = tasks.filter((task) => !task.completed).map((task) => ({ id: `task-${task.id}`, title: task.title, date: taskEndDate(task), kind: 'task' as const, completed: task.completed }))
@@ -134,7 +141,7 @@ export function PlanningPage() {
         <section className="tasks-panel"><div className="tasks-heading"><div><span className="section-kicker"><FaClipboardCheck /> TAREFAS DE {month.toLocaleDateString('pt-BR', { month: 'long' }).toLocaleUpperCase('pt-BR')}</span><h3>Lista do ateliê</h3></div><strong>{monthTasks.filter((task) => !task.completed).length}</strong></div>
           {monthTasks.length > 0 ? <div className="task-list">{monthTasks.map((task) => { const linkedProject = projects.find((project) => project.id === task.projectId); return <div className={task.completed ? 'task-row completed' : taskEndDate(task) < today ? 'task-row late' : 'task-row'} key={task.id}><button className="task-check" onClick={() => saveTasks(tasks.map((item) => item.id === task.id ? { ...item, completed: !item.completed } : item))} type="button" aria-label={`${task.completed ? 'Reabrir' : 'Concluir'} ${task.title}`}>{task.completed && <FaCheck />}</button><span><strong>{task.title}</strong><small>{formatTaskPeriod(task)} · <b className={`priority-text priority-${task.priority.toLocaleLowerCase('pt-BR')}`}>{task.priority}</b></small>{linkedProject && <Link className="task-project-link" to="/projetos">Projeto: {linkedProject.title}</Link>}</span><div className="task-row-actions"><button className="task-edit" onClick={() => editTask(task)} type="button" aria-label={`Editar ${task.title}`}><FaPen /></button><ConfirmButton className="task-delete" title="Excluir tarefa?" message={`A tarefa “${task.title}” será removida do planejamento.`} ariaLabel={`Excluir ${task.title}`} onConfirm={() => saveTasks(tasks.filter((item) => item.id !== task.id))}><FaTrash /></ConfirmButton></div></div> })}</div> : <p>Nenhuma tarefa cadastrada neste mês.</p>}
         </section>
-        {unavailableDays.length > 0 && <section className="unavailable-panel"><div className="tasks-heading"><div><span className="section-kicker"><FaBan /> INDISPONIBILIDADE</span><h3>Dias bloqueados</h3></div><strong>{unavailableDays.length}</strong></div><div className="unavailable-list">{[...unavailableDays].sort((a, b) => a.date.localeCompare(b.date)).map((item) => <div key={item.id}><time>{parseDate(item.date).toLocaleDateString('pt-BR')}</time><span>{item.reason}</span><ConfirmButton title="Remover dia indisponível?" message={`O dia ${parseDate(item.date).toLocaleDateString('pt-BR')} voltará a ficar disponível.`} ariaLabel={`Remover indisponibilidade de ${item.date}`} onConfirm={() => saveUnavailableDays(unavailableDays.filter((day) => day.id !== item.id))}><FaTrash /></ConfirmButton></div>)}</div></section>}
+        <section className="unavailable-panel"><div className="tasks-heading"><div><span className="section-kicker"><FaBan /> INDISPONIBILIDADE DE {month.toLocaleDateString('pt-BR', { month: 'long' }).toLocaleUpperCase('pt-BR')}</span><h3>Dias bloqueados</h3></div><strong>{monthUnavailableDays.length}</strong></div>{monthUnavailableDays.length > 0 ? <div className="unavailable-list">{monthUnavailableDays.map((item) => <div key={item.id}><time>{parseDate(item.date).toLocaleDateString('pt-BR')}</time><span>{item.reason}</span><ConfirmButton title="Remover dia indisponível?" message={`O dia ${parseDate(item.date).toLocaleDateString('pt-BR')} voltará a ficar disponível.`} ariaLabel={`Remover indisponibilidade de ${item.date}`} onConfirm={() => saveUnavailableDays(unavailableDays.filter((day) => day.id !== item.id))}><FaTrash /></ConfirmButton></div>)}</div> : <p className="unavailable-empty">Nenhum dia bloqueado neste mês.</p>}</section>
       </aside>
     </div>
 

@@ -583,6 +583,7 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .priority-média { color: #a27b3f; }
 .priority-baixa { color: #568264; }
 .unavailable-list { display: grid; gap: 7px; margin-top: 15px; }
+.unavailable-empty { margin: 15px 0 0; color: $muted; font-size: 10px; }
 .unavailable-list > div { display: grid; grid-template-columns: 70px minmax(0, 1fr) 25px; align-items: center; gap: 8px; padding: 9px; border-radius: 10px; background: $cream; }
 .unavailable-list time { color: $brown; font-size: 9px; font-weight: 800; }
 .unavailable-list span { overflow: hidden; color: $muted; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
