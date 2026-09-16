@@ -107,6 +107,10 @@ export function MobileDashboard({ user }: { user: User }) {
   const [timerBusy, setTimerBusy] = useState(false)
   const [selectedProjectDetailsId, setSelectedProjectDetailsId] = useState<string | null>(null)
   const [updatingProject, setUpdatingProject] = useState(false)
+  const [planningMonth, setPlanningMonth] = useState(() => {
+    const today = new Date()
+    return new Date(today.getFullYear(), today.getMonth(), 1)
+  })
 
   useEffect(() => onSnapshot(doc(db, 'users', user.uid, 'settings', 'atelier'), (snapshot) => {
     if (snapshot.exists()) setSettings(snapshot.data() as AtelierSettings)
@@ -160,6 +164,16 @@ export function MobileDashboard({ user }: { user: User }) {
   const timerProjects = summary.activeProjects
   const selectedProject = timerProjects.find((project) => project.id === selectedProjectId)
   const selectedProjectDetails = projects.find((project) => project.id === selectedProjectDetailsId) ?? null
+  const planningMonthStart = dateKey(new Date(planningMonth.getFullYear(), planningMonth.getMonth(), 1))
+  const planningMonthEnd = dateKey(new Date(planningMonth.getFullYear(), planningMonth.getMonth() + 1, 0))
+  const planningMonthTasks = useMemo(() => tasks
+    .filter((task) => task.date <= planningMonthEnd && (task.endDate || task.date) >= planningMonthStart)
+    .sort((first, second) => first.date.localeCompare(second.date)), [planningMonthEnd, planningMonthStart, tasks])
+  const planningPendingTasks = planningMonthTasks.filter((task) => !task.completed)
+  const planningCompletedTasks = planningMonthTasks.filter((task) => task.completed)
+  const planningMonthLabel = planningMonth
+    .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+    .replace(/^./, (letter) => letter.toLocaleUpperCase('pt-BR'))
 
   function openPage(page: MobilePage) {
     setActivePage(page)
@@ -490,11 +504,19 @@ export function MobileDashboard({ user }: { user: User }) {
         </View>
       ) : (
         <View style={styles.sectionCard}>
-          <View style={styles.sectionHeading}>
-            <View><Text style={styles.sectionKicker}>TAREFAS PENDENTES</Text><Text style={styles.sectionTitle}>Lista do ateliê</Text></View>
-            <Text style={styles.countBadge}>{summary.pendingTasks.length}</Text>
+          <View style={styles.monthNavigator}>
+            <Pressable accessibilityLabel="Mês anterior" onPress={() => setPlanningMonth(new Date(planningMonth.getFullYear(), planningMonth.getMonth() - 1, 1))} style={styles.monthButton}><Text style={styles.monthButtonText}>‹</Text></Pressable>
+            <Pressable onPress={() => { const today = new Date(); setPlanningMonth(new Date(today.getFullYear(), today.getMonth(), 1)) }} style={styles.monthLabelButton}>
+              <Text style={styles.monthLabel}>{planningMonthLabel}</Text>
+              <Text style={styles.monthTodayHint}>TOQUE PARA VOLTAR AO MÊS ATUAL</Text>
+            </Pressable>
+            <Pressable accessibilityLabel="Próximo mês" onPress={() => setPlanningMonth(new Date(planningMonth.getFullYear(), planningMonth.getMonth() + 1, 1))} style={styles.monthButton}><Text style={styles.monthButtonText}>›</Text></Pressable>
           </View>
-          {summary.pendingTasks.length ? summary.pendingTasks.map((task) => {
+          <View style={styles.sectionHeading}>
+            <View><Text style={styles.sectionKicker}>TAREFAS DO MÊS</Text><Text style={styles.sectionTitle}>Lista do ateliê</Text></View>
+            <Text style={styles.countBadge}>{planningPendingTasks.length}</Text>
+          </View>
+          {planningPendingTasks.length ? planningPendingTasks.map((task) => {
             const linkedProject = projects.find((project) => project.id === task.projectId)
             const isLate = (task.endDate || task.date) < summary.today && !inactiveStatuses.has(linkedProject?.status ?? '')
             return <View key={task.id} style={styles.taskRowLarge}>
@@ -507,11 +529,11 @@ export function MobileDashboard({ user }: { user: User }) {
               </View>
               {isLate ? <Text style={styles.lateText}>ATRASADA</Text> : <Text style={styles.priorityText}>{task.priority}</Text>}
             </View>
-          }) : <Text style={styles.emptyText}>Tudo em dia por aqui ✨</Text>}
+          }) : <Text style={styles.emptyText}>Nenhuma tarefa pendente neste mês ✨</Text>}
 
-          {tasks.some((task) => task.completed) ? <View style={styles.completedSection}>
-            <Text style={styles.completedTitle}>CONCLUÍDAS RECENTEMENTE</Text>
-            {tasks.filter((task) => task.completed).slice(0, 5).map((task) => (
+          {planningCompletedTasks.length ? <View style={styles.completedSection}>
+            <Text style={styles.completedTitle}>CONCLUÍDAS NESTE MÊS</Text>
+            {planningCompletedTasks.map((task) => (
               <View key={task.id} style={styles.completedRow}>
                 <Pressable accessibilityLabel={`Reabrir ${task.title}`} disabled={updatingTaskId === task.id} onPress={() => toggleTask(task)} style={[styles.taskCheck, styles.taskCheckCompleted]}>
                   {updatingTaskId === task.id ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.taskCheckCompletedText}>✓</Text>}
@@ -588,6 +610,12 @@ const styles = StyleSheet.create({
   statusOptionTextActive: { color: '#704B3D', fontWeight: '900' },
   statusCheck: { color: '#D77F8B', fontSize: 15, fontWeight: '900' },
   statusLoading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 },
+  monthNavigator: { minHeight: 64, flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5, borderRadius: 15, backgroundColor: '#FFF5F4' },
+  monthButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#F7DDDC' },
+  monthButtonText: { color: '#9A6B56', fontSize: 30, lineHeight: 32, fontWeight: '500' },
+  monthLabelButton: { flex: 1, alignItems: 'center', paddingHorizontal: 5 },
+  monthLabel: { color: '#704B3D', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 15 },
+  monthTodayHint: { marginTop: 3, color: '#B3867A', fontSize: 6, fontWeight: '900', letterSpacing: 0.45 },
   welcomeCard: { padding: 21, borderRadius: 22, backgroundColor: '#E9A0A8' },
   eyebrow: { color: '#FFF5F4', fontSize: 9, fontWeight: '800', letterSpacing: 1 },
   welcomeTitle: { marginTop: 7, color: '#FFFFFF', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 26 },
