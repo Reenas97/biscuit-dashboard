@@ -4,6 +4,7 @@ import { signOut } from 'firebase/auth'
 import { collection, doc, onSnapshot } from 'firebase/firestore'
 import {
   ActivityIndicator,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -42,6 +43,8 @@ type TimeEntry = {
 type AtelierSettings = {
   ownerName?: string
 }
+
+type MobilePage = 'home' | 'projects' | 'planning'
 
 const inactiveStatuses = new Set(['Stand by', 'Pronto', 'Entregue'])
 
@@ -91,6 +94,8 @@ export function MobileDashboard({ user }: { user: User }) {
   const { items: timeEntries, ready: timeReady } = useUserCollection<TimeEntry>(user.uid, 'timeEntries')
   const [settings, setSettings] = useState<AtelierSettings>({})
   const [now, setNow] = useState(Date.now())
+  const [activePage, setActivePage] = useState<MobilePage>('home')
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => onSnapshot(doc(db, 'users', user.uid, 'settings', 'atelier'), (snapshot) => {
     if (snapshot.exists()) setSettings(snapshot.data() as AtelierSettings)
@@ -128,6 +133,11 @@ export function MobileDashboard({ user }: { user: User }) {
   const ownerFirstName = settings.ownerName?.trim().split(/\s+/)[0] || 'Renata'
   const loading = !projectsReady || !tasksReady || !timeReady
 
+  function openPage(page: MobilePage) {
+    setActivePage(page)
+    setMenuOpen(false)
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.dashboard} showsVerticalScrollIndicator={false}>
       <View style={styles.brandRow}>
@@ -136,18 +146,41 @@ export function MobileDashboard({ user }: { user: User }) {
           <Text style={styles.brandName}>Reena Biscuit</Text>
           <Text style={styles.brandSubtitle}>ATELIÊ DE BISCUIT</Text>
         </View>
-        <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>ONLINE</Text></View>
+        <Pressable accessibilityLabel="Abrir menu" onPress={() => setMenuOpen(true)} style={({ pressed }) => [styles.menuButton, pressed && styles.buttonPressed]}>
+          <Text style={styles.menuButtonIcon}>☰</Text>
+        </Pressable>
       </View>
 
-      <View style={styles.welcomeCard}>
+      <Modal animationType="slide" onRequestClose={() => setMenuOpen(false)} transparent visible={menuOpen}>
+        <View style={styles.menuBackdrop}>
+          <View style={styles.menuSheet}>
+            <View style={styles.menuHeading}>
+              <View><Text style={styles.sectionKicker}>REENA BISCUIT</Text><Text style={styles.menuTitle}>Menu</Text></View>
+              <Pressable accessibilityLabel="Fechar menu" onPress={() => setMenuOpen(false)} style={styles.menuClose}><Text style={styles.menuCloseText}>×</Text></Pressable>
+            </View>
+            <Pressable onPress={() => openPage('home')} style={[styles.menuItem, activePage === 'home' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>⌂</Text><Text style={styles.menuItemText}>Início</Text></Pressable>
+            <Pressable onPress={() => openPage('projects')} style={[styles.menuItem, activePage === 'projects' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>▦</Text><Text style={styles.menuItemText}>Projetos</Text></Pressable>
+            <Pressable onPress={() => openPage('planning')} style={[styles.menuItem, activePage === 'planning' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>✓</Text><Text style={styles.menuItemText}>Planejamento</Text></Pressable>
+            <View style={styles.menuDivider} />
+            <View style={styles.menuSync}><View style={styles.liveDot} /><Text style={styles.menuSyncText}>Firebase conectado e sincronizado</Text></View>
+            <Pressable onPress={() => signOut(auth)} style={styles.menuLogout}><Text style={styles.menuLogoutText}>Sair da conta</Text></Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {activePage === 'home' ? <View style={styles.welcomeCard}>
         <Text style={styles.eyebrow}>{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).toLocaleUpperCase('pt-BR')}</Text>
         <Text style={styles.welcomeTitle}>Olá, {ownerFirstName} 🐾</Text>
         <Text style={styles.welcomeText}>Seu ateliê, seus prazos e sua bancada também no celular.</Text>
-      </View>
+      </View> : <View style={styles.pageHeading}>
+        <Text style={styles.sectionKicker}>{activePage === 'projects' ? '🐾 PRODUÇÃO' : '✓ ROTINA DO ATELIÊ'}</Text>
+        <Text style={styles.pageTitle}>{activePage === 'projects' ? 'Projetos' : 'Planejamento'}</Text>
+        <Text style={styles.pageSubtitle}>{activePage === 'projects' ? 'Acompanhe todas as etapas das suas peças.' : 'Veja tarefas, prazos e o que precisa da sua atenção.'}</Text>
+      </View>}
 
       {loading ? (
         <View style={styles.loadingCard}><ActivityIndicator color="#9A6B56" /><Text style={styles.loadingText}>Sincronizando seu ateliê...</Text></View>
-      ) : (
+      ) : activePage === 'home' ? (
         <>
           <View style={styles.summaryRow}>
             <View style={styles.summaryCard}>
@@ -237,7 +270,52 @@ export function MobileDashboard({ user }: { user: User }) {
             )) : <Text style={styles.emptyText}>Nenhum projeto ativo no momento.</Text>}
           </View>
         </>
+      ) : activePage === 'projects' ? (
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeading}>
+            <View><Text style={styles.sectionKicker}>TODOS OS PROJETOS</Text><Text style={styles.sectionTitle}>{projects.length} cadastrados</Text></View>
+            <Text style={styles.countBadge}>{summary.activeProjects.length} ativos</Text>
+          </View>
+          {projects.length ? [...projects]
+            .sort((first, second) => (first.deadline || '9999').localeCompare(second.deadline || '9999'))
+            .map((project) => (
+              <View key={project.id} style={styles.projectRowLarge}>
+                <View style={[styles.projectIcon, project.status === 'Stand by' && styles.projectIconStandBy]}><Text style={styles.projectIconText}>R</Text></View>
+                <View style={styles.rowBody}>
+                  <Text style={styles.rowTitle}>{project.title}</Text>
+                  <Text style={styles.rowMeta}>{project.client || 'Projeto pessoal'} · {formatShortDate(project.deadline)}</Text>
+                </View>
+                <Text style={[styles.statusBadge, project.status === 'Stand by' && styles.statusBadgeStandBy, inactiveStatuses.has(project.status) && project.status !== 'Stand by' && styles.statusBadgeDone]}>{project.status}</Text>
+              </View>
+            )) : <Text style={styles.emptyText}>Nenhum projeto cadastrado.</Text>}
+        </View>
+      ) : (
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeading}>
+            <View><Text style={styles.sectionKicker}>TAREFAS PENDENTES</Text><Text style={styles.sectionTitle}>Lista do ateliê</Text></View>
+            <Text style={styles.countBadge}>{summary.pendingTasks.length}</Text>
+          </View>
+          {summary.pendingTasks.length ? summary.pendingTasks.map((task) => {
+            const linkedProject = projects.find((project) => project.id === task.projectId)
+            const isLate = (task.endDate || task.date) < summary.today && !inactiveStatuses.has(linkedProject?.status ?? '')
+            return <View key={task.id} style={styles.taskRowLarge}>
+              <View style={[styles.priorityDot, task.priority === 'Alta' && styles.priorityHigh, task.priority === 'Baixa' && styles.priorityLow]} />
+              <View style={styles.rowBody}>
+                <Text style={[styles.rowTitle, isLate && styles.warningText]}>{task.title}</Text>
+                <Text style={styles.rowMeta}>{formatShortDate(task.date)}{task.endDate && task.endDate !== task.date ? ` até ${formatShortDate(task.endDate)}` : ''}{linkedProject ? ` · ${linkedProject.title}` : ''}</Text>
+              </View>
+              {isLate ? <Text style={styles.lateText}>ATRASADA</Text> : <Text style={styles.priorityText}>{task.priority}</Text>}
+            </View>
+          }) : <Text style={styles.emptyText}>Tudo em dia por aqui ✨</Text>}
+        </View>
       )}
+
+      <View style={styles.bottomNavigation}>
+        <Pressable onPress={() => openPage('home')} style={[styles.navItem, activePage === 'home' && styles.navItemActive]}><Text style={styles.navIcon}>⌂</Text><Text style={styles.navText}>Início</Text></Pressable>
+        <Pressable onPress={() => openPage('projects')} style={[styles.navItem, activePage === 'projects' && styles.navItemActive]}><Text style={styles.navIcon}>▦</Text><Text style={styles.navText}>Projetos</Text></Pressable>
+        <Pressable onPress={() => openPage('planning')} style={[styles.navItem, activePage === 'planning' && styles.navItemActive]}><Text style={styles.navIcon}>✓</Text><Text style={styles.navText}>Planejamento</Text></Pressable>
+        <Pressable onPress={() => setMenuOpen(true)} style={styles.navItem}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
+      </View>
 
       <Pressable onPress={() => signOut(auth)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
         <Text style={styles.secondaryButtonText}>Sair da conta</Text>
@@ -258,10 +336,30 @@ const styles = StyleSheet.create({
   liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 20, backgroundColor: '#FFF8F7' },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#73A276' },
   liveText: { color: '#77836E', fontSize: 8, fontWeight: '900', letterSpacing: 0.7 },
+  menuButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 14, backgroundColor: '#FFF8F7' },
+  menuButtonIcon: { color: '#8B6252', fontSize: 21, fontWeight: '700' },
+  menuBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(76, 49, 40, 0.34)' },
+  menuSheet: { paddingHorizontal: 20, paddingTop: 21, paddingBottom: 34, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
+  menuHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 17 },
+  menuTitle: { marginTop: 4, color: '#704B3D', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 25 },
+  menuClose: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 19, backgroundColor: '#F7DDDC' },
+  menuCloseText: { color: '#8B6252', fontSize: 25, lineHeight: 27 },
+  menuItem: { minHeight: 54, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, marginBottom: 7, borderRadius: 14 },
+  menuItemActive: { backgroundColor: '#F8E3E2' },
+  menuItemIcon: { width: 31, color: '#D77F8B', fontSize: 20, fontWeight: '800' },
+  menuItemText: { color: '#704B3D', fontSize: 14, fontWeight: '800' },
+  menuDivider: { height: 1, marginVertical: 12, backgroundColor: '#ECD6D4' },
+  menuSync: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 4 },
+  menuSyncText: { color: '#77836E', fontSize: 10, fontWeight: '700' },
+  menuLogout: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 17, borderWidth: 1, borderColor: '#D9BCB7', borderRadius: 13 },
+  menuLogoutText: { color: '#8B6252', fontSize: 12, fontWeight: '800' },
   welcomeCard: { padding: 21, borderRadius: 22, backgroundColor: '#E9A0A8' },
   eyebrow: { color: '#FFF5F4', fontSize: 9, fontWeight: '800', letterSpacing: 1 },
   welcomeTitle: { marginTop: 7, color: '#FFFFFF', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 26 },
   welcomeText: { marginTop: 7, color: '#FFF7F6', fontSize: 12, lineHeight: 18 },
+  pageHeading: { paddingHorizontal: 4, paddingVertical: 10 },
+  pageTitle: { marginTop: 5, color: '#704B3D', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 28 },
+  pageSubtitle: { marginTop: 5, color: '#9A7D72', fontSize: 11, lineHeight: 17 },
   loadingCard: { minHeight: 150, alignItems: 'center', justifyContent: 'center', gap: 11, marginTop: 14, borderRadius: 18, backgroundColor: '#FFFBFA' },
   loadingText: { color: '#9A7D72', fontSize: 12 },
   summaryRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
@@ -282,16 +380,28 @@ const styles = StyleSheet.create({
   rowMeta: { marginTop: 3, color: '#A48A80', fontSize: 9 },
   taskRow: { flexDirection: 'row', alignItems: 'center', minHeight: 53, borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
   projectRow: { flexDirection: 'row', alignItems: 'center', minHeight: 58, borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
+  projectRowLarge: { flexDirection: 'row', alignItems: 'center', minHeight: 69, borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
+  taskRowLarge: { flexDirection: 'row', alignItems: 'center', minHeight: 65, borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
   priorityDot: { width: 8, height: 8, marginRight: 11, borderRadius: 4, backgroundColor: '#E6B75D' },
   priorityHigh: { backgroundColor: '#D86471' },
   priorityLow: { backgroundColor: '#7DAA91' },
   projectIcon: { width: 35, height: 35, alignItems: 'center', justifyContent: 'center', marginRight: 11, borderRadius: 18, backgroundColor: '#F7DDDC' },
   projectIconText: { color: '#D77F8B', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 17, fontStyle: 'italic' },
+  projectIconStandBy: { backgroundColor: '#E8E9EC' },
+  statusBadge: { maxWidth: 92, paddingHorizontal: 8, paddingVertical: 5, overflow: 'hidden', borderRadius: 9, backgroundColor: '#F7DDDC', color: '#8B6252', fontSize: 7, fontWeight: '900', textAlign: 'center' },
+  statusBadgeStandBy: { backgroundColor: '#E8E9EC', color: '#697080' },
+  statusBadgeDone: { backgroundColor: '#DFEFE3', color: '#55795E' },
+  priorityText: { color: '#A48A80', fontSize: 8, fontWeight: '800' },
   lateBadge: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, backgroundColor: '#FDE0DF', color: '#B84D5C', fontSize: 8, fontWeight: '900' },
   lateText: { color: '#B84D5C', fontSize: 7, fontWeight: '900' },
   warningText: { color: '#B84D5C' },
   countBadge: { minWidth: 25, paddingHorizontal: 7, paddingVertical: 5, overflow: 'hidden', borderRadius: 13, backgroundColor: '#F7DDDC', color: '#8B6252', fontSize: 9, fontWeight: '900', textAlign: 'center' },
   emptyText: { marginTop: 14, color: '#A48A80', fontSize: 11 },
+  bottomNavigation: { flexDirection: 'row', marginTop: 16, padding: 6, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 18, backgroundColor: '#FFFBFA' },
+  navItem: { flex: 1, minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 13 },
+  navItemActive: { backgroundColor: '#F8E3E2' },
+  navIcon: { color: '#D77F8B', fontSize: 17, fontWeight: '800' },
+  navText: { marginTop: 3, color: '#8B6252', fontSize: 7, fontWeight: '800' },
   secondaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 18, borderWidth: 1, borderColor: '#D9BCB7', borderRadius: 12 },
   buttonPressed: { opacity: 0.7 },
   secondaryButtonText: { color: '#8B6252', fontSize: 13, fontWeight: '700' },
