@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { User } from 'firebase/auth'
 import { signOut } from 'firebase/auth'
-import { arrayUnion, collection, deleteField, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
+import { arrayRemove, arrayUnion, collection, deleteField, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import {
   ActivityIndicator,
   Modal,
@@ -57,6 +57,11 @@ type TaskForm = {
   endDate: string
   priority: string
   projectId: string
+}
+
+type UnavailableForm = {
+  date: string
+  reason: string
 }
 
 type AtelierSettings = {
@@ -154,6 +159,10 @@ export function MobileDashboard({ user }: { user: User }) {
   const [taskForm, setTaskForm] = useState<TaskForm | null>(null)
   const [taskFormError, setTaskFormError] = useState('')
   const [savingTask, setSavingTask] = useState(false)
+  const [unavailableForm, setUnavailableForm] = useState<UnavailableForm | null>(null)
+  const [unavailableFormError, setUnavailableFormError] = useState('')
+  const [savingUnavailable, setSavingUnavailable] = useState(false)
+  const [removingUnavailableId, setRemovingUnavailableId] = useState<string | null>(null)
 
   useEffect(() => onSnapshot(doc(db, 'users', user.uid, 'settings', 'atelier'), (snapshot) => {
     if (snapshot.exists()) setSettings(snapshot.data() as AtelierSettings)
@@ -320,6 +329,56 @@ export function MobileDashboard({ user }: { user: User }) {
       setTaskFormError('Não foi possível salvar a tarefa. Tente novamente.')
     } finally {
       setSavingTask(false)
+    }
+  }
+
+  function openUnavailableForm(date = summary.today) {
+    setUnavailableFormError('')
+    setUnavailableForm({ date: formatInputDate(date), reason: '' })
+  }
+
+  async function saveUnavailableForm() {
+    if (!unavailableForm || savingUnavailable) return
+    const date = parseInputDate(unavailableForm.date)
+    if (!date) { setUnavailableFormError('Use uma data válida no formato dia/mês/ano.'); return }
+    if (!unavailableForm.reason.trim()) { setUnavailableFormError('Informe o motivo da indisponibilidade.'); return }
+    setSavingUnavailable(true)
+    setUnavailableFormError('')
+    try {
+      const unavailableId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+      const batch = writeBatch(db)
+      batch.set(doc(db, 'users', user.uid, 'unavailableDays', unavailableId), {
+        id: unavailableId,
+        date,
+        reason: unavailableForm.reason.trim(),
+        createdAt: new Date().toISOString(),
+      })
+      batch.set(doc(db, 'users', user.uid, 'unavailableDays', '_index'), { ids: arrayUnion(unavailableId), updatedAt: serverTimestamp() }, { merge: true })
+      await batch.commit()
+      setUnavailableForm(null)
+      setActionMessage('Dia indisponível adicionado ao calendário.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setUnavailableFormError('Não foi possível bloquear este dia. Tente novamente.')
+    } finally {
+      setSavingUnavailable(false)
+    }
+  }
+
+  async function removeUnavailableDay(item: UnavailableDay) {
+    if (removingUnavailableId) return
+    setRemovingUnavailableId(item.id)
+    try {
+      const batch = writeBatch(db)
+      batch.delete(doc(db, 'users', user.uid, 'unavailableDays', item.id))
+      batch.set(doc(db, 'users', user.uid, 'unavailableDays', '_index'), { ids: arrayRemove(item.id), updatedAt: serverTimestamp() }, { merge: true })
+      await batch.commit()
+      setActionMessage('Dia liberado novamente.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setActionMessage('Não foi possível remover a indisponibilidade.')
+    } finally {
+      setRemovingUnavailableId(null)
     }
   }
 
@@ -518,9 +577,11 @@ export function MobileDashboard({ user }: { user: User }) {
               {selectedDayUnavailable.map((item) => <View key={`unavailable-${item.id}`} style={[styles.dayDetailRow, styles.dayDetailUnavailable]}>
                 <Text style={styles.dayDetailIcon}>×</Text>
                 <View style={styles.rowBody}><Text style={styles.rowTitle}>{item.reason}</Text><Text style={styles.rowMeta}>Dia indisponível</Text></View>
+                <Pressable accessibilityLabel={`Remover indisponibilidade: ${item.reason}`} disabled={removingUnavailableId === item.id} onPress={() => removeUnavailableDay(item)} style={styles.removeUnavailableButton}>{removingUnavailableId === item.id ? <ActivityIndicator color="#85808C" size="small" /> : <Text style={styles.removeUnavailableText}>Remover</Text>}</Pressable>
               </View>)}
               {!selectedDayTasks.length && !selectedDayProjects.length && !selectedDayUnavailable.length ? <View style={styles.dayEmpty}><Text style={styles.dayEmptyIcon}>○</Text><Text style={styles.sectionTitle}>Nada planejado</Text><Text style={styles.emptyText}>Este dia está livre no seu ateliê.</Text></View> : null}
               <Pressable onPress={() => { const date = selectedPlanningDate || summary.today; setSelectedPlanningDate(null); openNewTask(date) }} style={styles.addTaskDayButton}><Text style={styles.addTaskDayButtonText}>＋ Adicionar tarefa neste dia</Text></Pressable>
+              <Pressable onPress={() => { const date = selectedPlanningDate || summary.today; setSelectedPlanningDate(null); openUnavailableForm(date) }} style={styles.blockDayButton}><Text style={styles.blockDayButtonText}>× Marcar dia como indisponível</Text></Pressable>
             </ScrollView>
           </View>
         </View>
@@ -549,6 +610,23 @@ export function MobileDashboard({ user }: { user: User }) {
               {taskFormError ? <Text style={styles.formError}>{taskFormError}</Text> : null}
               <Pressable disabled={savingTask} onPress={saveTaskForm} style={({ pressed }) => [styles.saveTaskButton, (pressed || savingTask) && styles.buttonPressed]}>{savingTask ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>{taskForm?.id ? 'Salvar alterações' : 'Adicionar tarefa'}</Text>}</Pressable>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal animationType="slide" onRequestClose={() => setUnavailableForm(null)} transparent visible={Boolean(unavailableForm)}>
+        <View style={styles.menuBackdrop}>
+          <View style={styles.unavailableFormSheet}>
+            <View style={styles.menuHeading}>
+              <View style={styles.projectDetailsHeading}><Text style={styles.sectionKicker}>BLOQUEAR AGENDA</Text><Text style={styles.menuTitle}>Adicionar dia indisponível</Text></View>
+              <Pressable accessibilityLabel="Fechar formulário" onPress={() => setUnavailableForm(null)} style={styles.menuClose}><Text style={styles.menuCloseText}>×</Text></Pressable>
+            </View>
+            <Text style={styles.formLabel}>DATA</Text>
+            <TextInput keyboardType="number-pad" maxLength={10} onChangeText={(date) => setUnavailableForm((current) => current ? { ...current, date: maskInputDate(date) } : current)} placeholder="DD/MM/AAAA" placeholderTextColor="#B69B91" style={styles.formInput} value={unavailableForm?.date || ''} />
+            <Text style={styles.formLabel}>MOTIVO</Text>
+            <TextInput multiline numberOfLines={4} onChangeText={(reason) => setUnavailableForm((current) => current ? { ...current, reason } : current)} placeholder="Ex.: Compromisso pessoal ou viagem" placeholderTextColor="#B69B91" style={[styles.formInput, styles.reasonInput]} textAlignVertical="top" value={unavailableForm?.reason || ''} />
+            {unavailableFormError ? <Text style={styles.formError}>{unavailableFormError}</Text> : null}
+            <Pressable disabled={savingUnavailable} onPress={saveUnavailableForm} style={({ pressed }) => [styles.saveUnavailableButton, (pressed || savingUnavailable) && styles.buttonPressed]}>{savingUnavailable ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>Bloquear dia</Text>}</Pressable>
           </View>
         </View>
       </Modal>
@@ -721,7 +799,7 @@ export function MobileDashboard({ user }: { user: User }) {
           <View style={styles.planningListDivider} />
           <View style={styles.sectionHeading}>
             <View><Text style={styles.sectionKicker}>TAREFAS DO MÊS</Text><Text style={styles.sectionTitle}>Lista do ateliê</Text></View>
-            <View style={styles.planningHeadingActions}><Text style={styles.countBadge}>{planningPendingTasks.length}</Text><Pressable accessibilityLabel="Adicionar tarefa" onPress={() => openNewTask()} style={styles.addTaskButton}><Text style={styles.addTaskButtonText}>＋</Text></Pressable></View>
+            <View style={styles.planningHeadingActions}><Text style={styles.countBadge}>{planningPendingTasks.length}</Text><Pressable accessibilityLabel="Adicionar dia indisponível" onPress={() => openUnavailableForm()} style={styles.blockDayHeadingButton}><Text style={styles.blockDayHeadingText}>×</Text></Pressable><Pressable accessibilityLabel="Adicionar tarefa" onPress={() => openNewTask()} style={styles.addTaskButton}><Text style={styles.addTaskButtonText}>＋</Text></Pressable></View>
           </View>
           {planningPendingTasks.length ? planningPendingTasks.map((task) => {
             const linkedProject = projects.find((project) => project.id === task.projectId)
@@ -828,7 +906,12 @@ const styles = StyleSheet.create({
   dayEmptyIcon: { marginBottom: 6, color: '#DDB8B4', fontSize: 35 },
   addTaskDayButton: { minHeight: 47, alignItems: 'center', justifyContent: 'center', marginTop: 9, borderRadius: 12, backgroundColor: '#F7DDDC' },
   addTaskDayButtonText: { color: '#8B6252', fontSize: 11, fontWeight: '900' },
+  blockDayButton: { minHeight: 47, alignItems: 'center', justifyContent: 'center', marginTop: 8, borderWidth: 1, borderColor: '#D9D5DD', borderRadius: 12, backgroundColor: '#F2F0F4' },
+  blockDayButtonText: { color: '#706B77', fontSize: 11, fontWeight: '900' },
+  removeUnavailableButton: { minWidth: 55, minHeight: 31, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, borderRadius: 9, backgroundColor: '#E4E1E7' },
+  removeUnavailableText: { color: '#706B77', fontSize: 7, fontWeight: '900' },
   taskFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
+  unavailableFormSheet: { paddingHorizontal: 20, paddingTop: 21, paddingBottom: 30, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   formLabel: { marginTop: 13, marginBottom: 7, color: '#9A7D72', fontSize: 8, fontWeight: '900', letterSpacing: 0.7 },
   formInput: { minHeight: 48, paddingHorizontal: 13, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 12, backgroundColor: '#FFF7F6', color: '#704B3D', fontSize: 12 },
   dateInputRow: { flexDirection: 'row', gap: 9 },
@@ -845,7 +928,11 @@ const styles = StyleSheet.create({
   formError: { marginTop: 10, color: '#B84D5C', fontSize: 10, fontWeight: '800' },
   saveTaskButton: { minHeight: 49, alignItems: 'center', justifyContent: 'center', marginTop: 16, borderRadius: 12, backgroundColor: '#9A6B56' },
   saveTaskButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  reasonInput: { minHeight: 100, paddingTop: 13 },
+  saveUnavailableButton: { minHeight: 49, alignItems: 'center', justifyContent: 'center', marginTop: 16, borderRadius: 12, backgroundColor: '#85808C' },
   planningHeadingActions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  blockDayHeadingButton: { width: 31, height: 31, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#85808C' },
+  blockDayHeadingText: { color: '#FFFFFF', fontSize: 20, lineHeight: 21, fontWeight: '600' },
   addTaskButton: { width: 31, height: 31, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#D77F8B' },
   addTaskButtonText: { color: '#FFFFFF', fontSize: 19, lineHeight: 21, fontWeight: '500' },
   editTaskButton: { width: 31, height: 31, alignItems: 'center', justifyContent: 'center', marginHorizontal: 5, borderRadius: 10, backgroundColor: '#FFF0EF' },
