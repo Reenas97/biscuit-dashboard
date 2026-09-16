@@ -43,6 +43,12 @@ type TimeEntry = {
   endedAt?: string
 }
 
+type UnavailableDay = {
+  id: string
+  date: string
+  reason: string
+}
+
 type AtelierSettings = {
   ownerName?: string
 }
@@ -96,6 +102,7 @@ export function MobileDashboard({ user }: { user: User }) {
   const { items: projects, ready: projectsReady } = useUserCollection<Project>(user.uid, 'projects')
   const { items: tasks, ready: tasksReady } = useUserCollection<Task>(user.uid, 'tasks')
   const { items: timeEntries, ready: timeReady } = useUserCollection<TimeEntry>(user.uid, 'timeEntries')
+  const { items: unavailableDays, ready: unavailableReady } = useUserCollection<UnavailableDay>(user.uid, 'unavailableDays')
   const [settings, setSettings] = useState<AtelierSettings>({})
   const [now, setNow] = useState(() => Date.now())
   const [activePage, setActivePage] = useState<MobilePage>('home')
@@ -111,6 +118,7 @@ export function MobileDashboard({ user }: { user: User }) {
     const today = new Date()
     return new Date(today.getFullYear(), today.getMonth(), 1)
   })
+  const [selectedPlanningDate, setSelectedPlanningDate] = useState<string | null>(null)
 
   useEffect(() => onSnapshot(doc(db, 'users', user.uid, 'settings', 'atelier'), (snapshot) => {
     if (snapshot.exists()) setSettings(snapshot.data() as AtelierSettings)
@@ -160,7 +168,7 @@ export function MobileDashboard({ user }: { user: User }) {
     ? Math.max(0, Math.floor((now - new Date(activeEntry.startedAt).getTime()) / 1000))
     : 0
   const ownerFirstName = settings.ownerName?.trim().split(/\s+/)[0] || 'Renata'
-  const loading = !projectsReady || !tasksReady || !timeReady
+  const loading = !projectsReady || !tasksReady || !timeReady || !unavailableReady
   const timerProjects = summary.activeProjects
   const selectedProject = timerProjects.find((project) => project.id === selectedProjectId)
   const selectedProjectDetails = projects.find((project) => project.id === selectedProjectDetailsId) ?? null
@@ -174,6 +182,25 @@ export function MobileDashboard({ user }: { user: User }) {
   const planningMonthLabel = planningMonth
     .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
     .replace(/^./, (letter) => letter.toLocaleUpperCase('pt-BR'))
+  const planningCalendarDays = useMemo(() => {
+    const firstDay = new Date(planningMonth.getFullYear(), planningMonth.getMonth(), 1)
+    const start = new Date(firstDay)
+    start.setDate(1 - firstDay.getDay())
+    return Array.from({ length: 42 }, (_, index) => {
+      const day = new Date(start)
+      day.setDate(start.getDate() + index)
+      return day
+    })
+  }, [planningMonth])
+  const selectedDayTasks = selectedPlanningDate
+    ? tasks.filter((task) => task.date <= selectedPlanningDate && (task.endDate || task.date) >= selectedPlanningDate)
+    : []
+  const selectedDayProjects = selectedPlanningDate
+    ? projects.filter((project) => project.deadline === selectedPlanningDate)
+    : []
+  const selectedDayUnavailable = selectedPlanningDate
+    ? unavailableDays.filter((item) => item.date === selectedPlanningDate)
+    : []
 
   function openPage(page: MobilePage) {
     setActivePage(page)
@@ -367,6 +394,39 @@ export function MobileDashboard({ user }: { user: User }) {
         </View>
       </Modal>
 
+      <Modal animationType="slide" onRequestClose={() => setSelectedPlanningDate(null)} transparent visible={Boolean(selectedPlanningDate)}>
+        <View style={styles.menuBackdrop}>
+          <View style={styles.dayDetailsSheet}>
+            <View style={styles.menuHeading}>
+              <View style={styles.projectDetailsHeading}>
+                <Text style={styles.sectionKicker}>AGENDA DO DIA</Text>
+                <Text style={styles.menuTitle}>{selectedPlanningDate ? parseDate(selectedPlanningDate).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }) : ''}</Text>
+              </View>
+              <Pressable accessibilityLabel="Fechar agenda do dia" onPress={() => setSelectedPlanningDate(null)} style={styles.menuClose}><Text style={styles.menuCloseText}>×</Text></Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {selectedDayTasks.map((task) => {
+                const linkedProject = projects.find((project) => project.id === task.projectId)
+                const isLate = !task.completed && (task.endDate || task.date) < summary.today && !inactiveStatuses.has(linkedProject?.status ?? '')
+                return <View key={`task-${task.id}`} style={[styles.dayDetailRow, isLate && styles.dayDetailLate, task.completed && styles.dayDetailDone]}>
+                  <Text style={styles.dayDetailIcon}>{task.completed ? '✓' : '▣'}</Text>
+                  <View style={styles.rowBody}><Text style={[styles.rowTitle, isLate && styles.warningText]}>{task.title}</Text><Text style={styles.rowMeta}>Tarefa · {task.priority}{linkedProject ? ` · ${linkedProject.title}` : ''}</Text></View>
+                </View>
+              })}
+              {selectedDayProjects.map((project) => <Pressable key={`project-${project.id}`} onPress={() => { setSelectedPlanningDate(null); setSelectedProjectDetailsId(project.id) }} style={[styles.dayDetailRow, inactiveStatuses.has(project.status) && styles.dayDetailDone]}>
+                <Text style={styles.dayDetailIcon}>R</Text>
+                <View style={styles.rowBody}><Text style={styles.rowTitle}>{project.title}</Text><Text style={styles.rowMeta}>Entrega · {project.client || 'Projeto pessoal'} · {project.status}</Text></View>
+              </Pressable>)}
+              {selectedDayUnavailable.map((item) => <View key={`unavailable-${item.id}`} style={[styles.dayDetailRow, styles.dayDetailUnavailable]}>
+                <Text style={styles.dayDetailIcon}>×</Text>
+                <View style={styles.rowBody}><Text style={styles.rowTitle}>{item.reason}</Text><Text style={styles.rowMeta}>Dia indisponível</Text></View>
+              </View>)}
+              {!selectedDayTasks.length && !selectedDayProjects.length && !selectedDayUnavailable.length ? <View style={styles.dayEmpty}><Text style={styles.dayEmptyIcon}>○</Text><Text style={styles.sectionTitle}>Nada planejado</Text><Text style={styles.emptyText}>Este dia está livre no seu ateliê.</Text></View> : null}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {activePage === 'home' ? <View style={styles.welcomeCard}>
         <Text style={styles.eyebrow}>{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).toLocaleUpperCase('pt-BR')}</Text>
         <Text style={styles.welcomeTitle}>Olá, {ownerFirstName} 🐾</Text>
@@ -512,6 +572,27 @@ export function MobileDashboard({ user }: { user: User }) {
             </Pressable>
             <Pressable accessibilityLabel="Próximo mês" onPress={() => setPlanningMonth(new Date(planningMonth.getFullYear(), planningMonth.getMonth() + 1, 1))} style={styles.monthButton}><Text style={styles.monthButtonText}>›</Text></Pressable>
           </View>
+          <View style={styles.calendarWeekdays}>{['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'].map((day) => <Text key={day} style={styles.calendarWeekday}>{day}</Text>)}</View>
+          <View style={styles.calendarGrid}>{planningCalendarDays.map((day) => {
+            const key = dateKey(day)
+            const outsideMonth = day.getMonth() !== planningMonth.getMonth()
+            const dayTasks = tasks.filter((task) => task.date <= key && (task.endDate || task.date) >= key)
+            const dayProjects = projects.filter((project) => project.deadline === key)
+            const dayUnavailable = unavailableDays.some((item) => item.date === key)
+            const hasLateTask = dayTasks.some((task) => !task.completed && (task.endDate || task.date) < summary.today && !inactiveStatuses.has(projects.find((project) => project.id === task.projectId)?.status ?? ''))
+            const allTasksDone = dayTasks.length > 0 && dayTasks.every((task) => task.completed)
+            const hasEvents = dayTasks.length > 0 || dayProjects.length > 0 || dayUnavailable
+            return <Pressable accessibilityLabel={`Ver agenda de ${day.toLocaleDateString('pt-BR')}`} key={key} onPress={() => setSelectedPlanningDate(key)} style={[styles.calendarDay, outsideMonth && styles.calendarDayOutside, key === summary.today && styles.calendarDayToday, hasLateTask && styles.calendarDayLate, allTasksDone && !hasLateTask && styles.calendarDayDone]}>
+              <Text style={[styles.calendarDayNumber, outsideMonth && styles.calendarDayNumberOutside]}>{day.getDate()}</Text>
+              {hasEvents ? <View style={styles.calendarDots}>
+                {dayTasks.length ? <View style={[styles.calendarDot, hasLateTask ? styles.calendarDotLate : allTasksDone ? styles.calendarDotDone : null]} /> : null}
+                {dayProjects.length ? <View style={[styles.calendarDot, styles.calendarDotProject]} /> : null}
+                {dayUnavailable ? <View style={[styles.calendarDot, styles.calendarDotUnavailable]} /> : null}
+              </View> : null}
+            </Pressable>
+          })}</View>
+          <View style={styles.calendarLegend}><Text style={styles.calendarLegendText}>● tarefa</Text><Text style={[styles.calendarLegendText, styles.calendarLegendProject]}>● entrega</Text><Text style={[styles.calendarLegendText, styles.calendarLegendUnavailable]}>● indisponível</Text></View>
+          <View style={styles.planningListDivider} />
           <View style={styles.sectionHeading}>
             <View><Text style={styles.sectionKicker}>TAREFAS DO MÊS</Text><Text style={styles.sectionTitle}>Lista do ateliê</Text></View>
             <Text style={styles.countBadge}>{planningPendingTasks.length}</Text>
@@ -610,12 +691,41 @@ const styles = StyleSheet.create({
   statusOptionTextActive: { color: '#704B3D', fontWeight: '900' },
   statusCheck: { color: '#D77F8B', fontSize: 15, fontWeight: '900' },
   statusLoading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 },
+  dayDetailsSheet: { maxHeight: '82%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 30, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
+  dayDetailRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 13, marginBottom: 8, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 14, backgroundColor: '#FFF8F7' },
+  dayDetailLate: { borderColor: '#EAA0A0', backgroundColor: '#FFF0EF' },
+  dayDetailDone: { borderColor: '#B9D8BF', backgroundColor: '#EEF7F0' },
+  dayDetailUnavailable: { borderColor: '#D9D5DD', backgroundColor: '#F2F0F4' },
+  dayDetailIcon: { width: 31, color: '#D77F8B', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 18, fontWeight: '800' },
+  dayEmpty: { minHeight: 170, alignItems: 'center', justifyContent: 'center' },
+  dayEmptyIcon: { marginBottom: 6, color: '#DDB8B4', fontSize: 35 },
   monthNavigator: { minHeight: 64, flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5, borderRadius: 15, backgroundColor: '#FFF5F4' },
   monthButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#F7DDDC' },
   monthButtonText: { color: '#9A6B56', fontSize: 30, lineHeight: 32, fontWeight: '500' },
   monthLabelButton: { flex: 1, alignItems: 'center', paddingHorizontal: 5 },
   monthLabel: { color: '#704B3D', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 15 },
   monthTodayHint: { marginTop: 3, color: '#B3867A', fontSize: 6, fontWeight: '900', letterSpacing: 0.45 },
+  calendarWeekdays: { flexDirection: 'row', marginBottom: 5 },
+  calendarWeekday: { width: '14.2857%', color: '#A48A80', fontSize: 6, fontWeight: '900', textAlign: 'center' },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calendarDay: { width: '14.2857%', aspectRatio: 0.9, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#F1E5E3', backgroundColor: '#FFFBFA' },
+  calendarDayOutside: { opacity: 0.35 },
+  calendarDayToday: { borderWidth: 2, borderColor: '#D77F8B', backgroundColor: '#FFF2F1' },
+  calendarDayLate: { backgroundColor: '#FDE5E3' },
+  calendarDayDone: { backgroundColor: '#E6F2E8' },
+  calendarDayNumber: { color: '#704B3D', fontSize: 10, fontWeight: '800' },
+  calendarDayNumberOutside: { color: '#B69B91' },
+  calendarDots: { flexDirection: 'row', gap: 2, marginTop: 4 },
+  calendarDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#E59AA3' },
+  calendarDotLate: { backgroundColor: '#C34E5D' },
+  calendarDotDone: { backgroundColor: '#73A276' },
+  calendarDotProject: { backgroundColor: '#9A6B56' },
+  calendarDotUnavailable: { backgroundColor: '#85808C' },
+  calendarLegend: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 10 },
+  calendarLegendText: { color: '#D77F8B', fontSize: 7, fontWeight: '800' },
+  calendarLegendProject: { color: '#9A6B56' },
+  calendarLegendUnavailable: { color: '#85808C' },
+  planningListDivider: { height: 1, marginVertical: 20, backgroundColor: '#ECD6D4' },
   welcomeCard: { padding: 21, borderRadius: 22, backgroundColor: '#E9A0A8' },
   eyebrow: { color: '#FFF5F4', fontSize: 9, fontWeight: '800', letterSpacing: 1 },
   welcomeTitle: { marginTop: 7, color: '#FFFFFF', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 26 },
