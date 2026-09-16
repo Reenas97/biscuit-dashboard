@@ -17,10 +17,13 @@ import { auth, db } from '../lib/firebase'
 type Project = {
   id: string
   title: string
+  description?: string
+  category?: string
   deadline?: string
   status: string
   client?: string
   type?: string
+  referenceLink?: string
 }
 
 type Task = {
@@ -47,6 +50,7 @@ type AtelierSettings = {
 type MobilePage = 'home' | 'projects' | 'planning'
 
 const inactiveStatuses = new Set(['Stand by', 'Pronto', 'Entregue'])
+const projectStatuses = ['Planejamento', 'Stand by', 'Modelagem', 'Secagem', 'Pintura', 'Finalização', 'Envernização', 'Pronto', 'Entregue']
 
 function dateKey(date: Date) {
   const year = date.getFullYear()
@@ -101,6 +105,8 @@ export function MobileDashboard({ user }: { user: User }) {
   const [selectedProjectId, setSelectedProjectId] = useState('')
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
   const [timerBusy, setTimerBusy] = useState(false)
+  const [selectedProjectDetailsId, setSelectedProjectDetailsId] = useState<string | null>(null)
+  const [updatingProject, setUpdatingProject] = useState(false)
 
   useEffect(() => onSnapshot(doc(db, 'users', user.uid, 'settings', 'atelier'), (snapshot) => {
     if (snapshot.exists()) setSettings(snapshot.data() as AtelierSettings)
@@ -153,6 +159,7 @@ export function MobileDashboard({ user }: { user: User }) {
   const loading = !projectsReady || !tasksReady || !timeReady
   const timerProjects = summary.activeProjects
   const selectedProject = timerProjects.find((project) => project.id === selectedProjectId)
+  const selectedProjectDetails = projects.find((project) => project.id === selectedProjectDetailsId) ?? null
 
   function openPage(page: MobilePage) {
     setActivePage(page)
@@ -237,6 +244,39 @@ export function MobileDashboard({ user }: { user: User }) {
     }
   }
 
+  async function changeProjectStatus(status: string) {
+    if (!selectedProjectDetails || updatingProject || status === selectedProjectDetails.status) return
+    setUpdatingProject(true)
+    setActionMessage('')
+    const shouldPause = inactiveStatuses.has(status) && activeEntry?.projectId === selectedProjectDetails.id
+    const nowIso = new Date().toISOString()
+    try {
+      if (shouldPause && activeEntry) {
+        const batch = writeBatch(db)
+        batch.update(doc(db, 'users', user.uid, 'projects', selectedProjectDetails.id), { status })
+        batch.update(doc(db, 'users', user.uid, 'timeEntries', activeEntry.id), {
+          endedAt: nowIso,
+          autoPaused: true,
+          pauseReason: `Projeto movido para ${status} no aplicativo mobile`,
+        })
+        batch.set(doc(db, 'users', user.uid, 'timer', 'current'), {
+          status: 'paused',
+          pauseReason: `Projeto movido para ${status} no aplicativo mobile`,
+          updatedAt: nowIso,
+        }, { merge: true })
+        await batch.commit()
+      } else {
+        await updateDoc(doc(db, 'users', user.uid, 'projects', selectedProjectDetails.id), { status })
+      }
+      setActionMessage(`Projeto movido para ${status}.`)
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setActionMessage('Não foi possível mudar a etapa do projeto.')
+    } finally {
+      setUpdatingProject(false)
+    }
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.dashboard} showsVerticalScrollIndicator={false}>
       <View style={styles.brandRow}>
@@ -281,6 +321,32 @@ export function MobileDashboard({ user }: { user: User }) {
                 {selectedProjectId === project.id ? <Text style={styles.projectSelected}>✓</Text> : null}
               </Pressable>)}
               {!timerProjects.length ? <Text style={styles.emptyText}>Nenhum projeto disponível para iniciar.</Text> : null}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal animationType="slide" onRequestClose={() => setSelectedProjectDetailsId(null)} transparent visible={Boolean(selectedProjectDetails)}>
+        <View style={styles.menuBackdrop}>
+          <View style={styles.projectDetailsSheet}>
+            <View style={styles.menuHeading}>
+              <View style={styles.projectDetailsHeading}><Text style={styles.sectionKicker}>{selectedProjectDetails?.type || 'PROJETO'}</Text><Text numberOfLines={2} style={styles.menuTitle}>{selectedProjectDetails?.title}</Text></View>
+              <Pressable accessibilityLabel="Fechar detalhes" onPress={() => setSelectedProjectDetailsId(null)} style={styles.menuClose}><Text style={styles.menuCloseText}>×</Text></Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.projectDetailsMeta}>
+                <View><Text style={styles.detailLabel}>CLIENTE</Text><Text style={styles.detailValue}>{selectedProjectDetails?.client || 'Projeto pessoal'}</Text></View>
+                <View><Text style={styles.detailLabel}>PRAZO</Text><Text style={styles.detailValue}>{formatShortDate(selectedProjectDetails?.deadline)}</Text></View>
+                <View><Text style={styles.detailLabel}>CATEGORIA</Text><Text style={styles.detailValue}>{selectedProjectDetails?.category || 'Não informada'}</Text></View>
+              </View>
+              {selectedProjectDetails?.description ? <View style={styles.projectDescription}><Text style={styles.detailLabel}>DESCRIÇÃO</Text><Text style={styles.projectDescriptionText}>{selectedProjectDetails.description}</Text></View> : null}
+              <Text style={styles.statusTitle}>ETAPA DO PROJETO</Text>
+              <View style={styles.statusGrid}>{projectStatuses.map((status) => <Pressable disabled={updatingProject} key={status} onPress={() => changeProjectStatus(status)} style={[styles.statusOption, selectedProjectDetails?.status === status && styles.statusOptionActive]}>
+                <View style={[styles.statusDot, status === 'Stand by' && styles.statusDotStandBy, (status === 'Pronto' || status === 'Entregue') && styles.statusDotDone]} />
+                <Text style={[styles.statusOptionText, selectedProjectDetails?.status === status && styles.statusOptionTextActive]}>{status}</Text>
+                {selectedProjectDetails?.status === status ? <Text style={styles.statusCheck}>✓</Text> : null}
+              </Pressable>)}</View>
+              {updatingProject ? <View style={styles.statusLoading}><ActivityIndicator color="#D77F8B" /><Text style={styles.loadingText}>Atualizando projeto...</Text></View> : null}
             </ScrollView>
           </View>
         </View>
@@ -411,14 +477,14 @@ export function MobileDashboard({ user }: { user: User }) {
           {projects.length ? [...projects]
             .sort((first, second) => (first.deadline || '9999').localeCompare(second.deadline || '9999'))
             .map((project) => (
-              <View key={project.id} style={styles.projectRowLarge}>
+              <Pressable key={project.id} onPress={() => setSelectedProjectDetailsId(project.id)} style={({ pressed }) => [styles.projectRowLarge, pressed && styles.projectRowPressed]}>
                 <View style={[styles.projectIcon, project.status === 'Stand by' && styles.projectIconStandBy]}><Text style={styles.projectIconText}>R</Text></View>
                 <View style={styles.rowBody}>
                   <Text style={styles.rowTitle}>{project.title}</Text>
                   <Text style={styles.rowMeta}>{project.client || 'Projeto pessoal'} · {formatShortDate(project.deadline)}</Text>
                 </View>
                 <Text style={[styles.statusBadge, project.status === 'Stand by' && styles.statusBadgeStandBy, inactiveStatuses.has(project.status) && project.status !== 'Stand by' && styles.statusBadgeDone]}>{project.status}</Text>
-              </View>
+              </Pressable>
             )) : <Text style={styles.emptyText}>Nenhum projeto cadastrado.</Text>}
         </View>
       ) : (
@@ -502,6 +568,24 @@ const styles = StyleSheet.create({
   projectPickerList: { maxHeight: 420 },
   projectPickerItem: { minHeight: 64, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 11, borderBottomWidth: 1, borderBottomColor: '#F2E4E2', borderRadius: 12 },
   projectSelected: { color: '#73A276', fontSize: 18, fontWeight: '900' },
+  projectDetailsSheet: { maxHeight: '88%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 30, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
+  projectDetailsHeading: { flex: 1, paddingRight: 12 },
+  projectDetailsMeta: { flexDirection: 'row', gap: 8, marginBottom: 15 },
+  detailLabel: { color: '#D77F8B', fontSize: 7, fontWeight: '900', letterSpacing: 0.7 },
+  detailValue: { marginTop: 4, color: '#704B3D', fontSize: 10, fontWeight: '800' },
+  projectDescription: { padding: 14, marginBottom: 18, borderRadius: 13, backgroundColor: '#FFF5F4' },
+  projectDescriptionText: { marginTop: 6, color: '#8B6F65', fontSize: 10, lineHeight: 16 },
+  statusTitle: { marginBottom: 9, color: '#9A7D72', fontSize: 8, fontWeight: '900', letterSpacing: 0.8 },
+  statusGrid: { gap: 7 },
+  statusOption: { minHeight: 45, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 13, borderWidth: 1, borderColor: '#EEE0DE', borderRadius: 12 },
+  statusOptionActive: { borderColor: '#E6A2AA', backgroundColor: '#FBE8E7' },
+  statusDot: { width: 8, height: 8, marginRight: 10, borderRadius: 4, backgroundColor: '#E59AA3' },
+  statusDotStandBy: { backgroundColor: '#8B94A6' },
+  statusDotDone: { backgroundColor: '#73A276' },
+  statusOptionText: { flex: 1, color: '#7D6258', fontSize: 11, fontWeight: '700' },
+  statusOptionTextActive: { color: '#704B3D', fontWeight: '900' },
+  statusCheck: { color: '#D77F8B', fontSize: 15, fontWeight: '900' },
+  statusLoading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 },
   welcomeCard: { padding: 21, borderRadius: 22, backgroundColor: '#E9A0A8' },
   eyebrow: { color: '#FFF5F4', fontSize: 9, fontWeight: '800', letterSpacing: 1 },
   welcomeTitle: { marginTop: 7, color: '#FFFFFF', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 26 },
@@ -542,6 +626,7 @@ const styles = StyleSheet.create({
   taskRow: { flexDirection: 'row', alignItems: 'center', minHeight: 53, borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
   projectRow: { flexDirection: 'row', alignItems: 'center', minHeight: 58, borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
   projectRowLarge: { flexDirection: 'row', alignItems: 'center', minHeight: 69, borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
+  projectRowPressed: { opacity: 0.55 },
   taskRowLarge: { flexDirection: 'row', alignItems: 'center', minHeight: 65, borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
   taskCheck: { width: 29, height: 29, alignItems: 'center', justifyContent: 'center', marginRight: 11, borderWidth: 1, borderColor: '#DDA4AA', borderRadius: 9, backgroundColor: '#FFF8F7' },
   taskCheckText: { color: '#D77F8B', fontSize: 14, fontWeight: '900' },
