@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { User } from 'firebase/auth'
 import { signOut } from 'firebase/auth'
-import { arrayUnion, collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
+import { arrayUnion, collection, deleteField, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import {
   ActivityIndicator,
   Modal,
@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native'
 import { auth, db } from '../lib/firebase'
@@ -49,6 +50,15 @@ type UnavailableDay = {
   reason: string
 }
 
+type TaskForm = {
+  id?: string
+  title: string
+  startDate: string
+  endDate: string
+  priority: string
+  projectId: string
+}
+
 type AtelierSettings = {
   ownerName?: string
 }
@@ -72,6 +82,28 @@ function parseDate(value: string) {
 function formatShortDate(value?: string) {
   if (!value) return 'Sem prazo'
   return parseDate(value).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+}
+
+function formatInputDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  const [year, month, day] = value.split('-')
+  return `${day}/${month}/${year}`
+}
+
+function maskInputDate(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 8)
+  if (digits.length <= 2) return digits
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+}
+
+function parseInputDate(value: string) {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value)
+  if (!match) return null
+  const [, day, month, year] = match
+  const iso = `${year}-${month}-${day}`
+  const parsed = parseDate(iso)
+  return dateKey(parsed) === iso ? iso : null
 }
 
 function formatDuration(totalSeconds: number) {
@@ -119,6 +151,9 @@ export function MobileDashboard({ user }: { user: User }) {
     return new Date(today.getFullYear(), today.getMonth(), 1)
   })
   const [selectedPlanningDate, setSelectedPlanningDate] = useState<string | null>(null)
+  const [taskForm, setTaskForm] = useState<TaskForm | null>(null)
+  const [taskFormError, setTaskFormError] = useState('')
+  const [savingTask, setSavingTask] = useState(false)
 
   useEffect(() => onSnapshot(doc(db, 'users', user.uid, 'settings', 'atelier'), (snapshot) => {
     if (snapshot.exists()) setSettings(snapshot.data() as AtelierSettings)
@@ -223,6 +258,68 @@ export function MobileDashboard({ user }: { user: User }) {
       setActionMessage('Não foi possível atualizar a tarefa. Tente novamente.')
     } finally {
       setUpdatingTaskId(null)
+    }
+  }
+
+  function openNewTask(date = summary.today) {
+    setTaskFormError('')
+    setTaskForm({ title: '', startDate: formatInputDate(date), endDate: formatInputDate(date), priority: 'Média', projectId: '' })
+  }
+
+  function openEditTask(task: Task) {
+    setSelectedPlanningDate(null)
+    setTaskFormError('')
+    setTaskForm({
+      id: task.id,
+      title: task.title,
+      startDate: formatInputDate(task.date),
+      endDate: formatInputDate(task.endDate || task.date),
+      priority: task.priority,
+      projectId: task.projectId || '',
+    })
+  }
+
+  async function saveTaskForm() {
+    if (!taskForm || savingTask) return
+    const startDate = parseInputDate(taskForm.startDate)
+    const endDate = parseInputDate(taskForm.endDate)
+    if (!taskForm.title.trim()) { setTaskFormError('Escreva o nome da tarefa.'); return }
+    if (!startDate || !endDate) { setTaskFormError('Use datas válidas no formato dia/mês/ano.'); return }
+    if (endDate < startDate) { setTaskFormError('O término não pode ser anterior ao início.'); return }
+    setSavingTask(true)
+    setTaskFormError('')
+    try {
+      if (taskForm.id) {
+        await updateDoc(doc(db, 'users', user.uid, 'tasks', taskForm.id), {
+          title: taskForm.title.trim(),
+          date: startDate,
+          endDate,
+          priority: taskForm.priority,
+          projectId: taskForm.projectId || deleteField(),
+        })
+      } else {
+        const taskId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+        const batch = writeBatch(db)
+        batch.set(doc(db, 'users', user.uid, 'tasks', taskId), {
+          id: taskId,
+          title: taskForm.title.trim(),
+          date: startDate,
+          endDate,
+          priority: taskForm.priority,
+          ...(taskForm.projectId ? { projectId: taskForm.projectId } : {}),
+          completed: false,
+          createdAt: new Date().toISOString(),
+        })
+        batch.set(doc(db, 'users', user.uid, 'tasks', '_index'), { ids: arrayUnion(taskId), updatedAt: serverTimestamp() }, { merge: true })
+        await batch.commit()
+      }
+      setTaskForm(null)
+      setActionMessage(taskForm.id ? 'Tarefa atualizada.' : 'Tarefa adicionada ao planejamento.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setTaskFormError('Não foi possível salvar a tarefa. Tente novamente.')
+    } finally {
+      setSavingTask(false)
     }
   }
 
@@ -408,10 +505,11 @@ export function MobileDashboard({ user }: { user: User }) {
               {selectedDayTasks.map((task) => {
                 const linkedProject = projects.find((project) => project.id === task.projectId)
                 const isLate = !task.completed && (task.endDate || task.date) < summary.today && !inactiveStatuses.has(linkedProject?.status ?? '')
-                return <View key={`task-${task.id}`} style={[styles.dayDetailRow, isLate && styles.dayDetailLate, task.completed && styles.dayDetailDone]}>
+                return <Pressable key={`task-${task.id}`} onPress={() => openEditTask(task)} style={[styles.dayDetailRow, isLate && styles.dayDetailLate, task.completed && styles.dayDetailDone]}>
                   <Text style={styles.dayDetailIcon}>{task.completed ? '✓' : '▣'}</Text>
                   <View style={styles.rowBody}><Text style={[styles.rowTitle, isLate && styles.warningText]}>{task.title}</Text><Text style={styles.rowMeta}>Tarefa · {task.priority}{linkedProject ? ` · ${linkedProject.title}` : ''}</Text></View>
-                </View>
+                  <Text style={styles.editGlyph}>✎</Text>
+                </Pressable>
               })}
               {selectedDayProjects.map((project) => <Pressable key={`project-${project.id}`} onPress={() => { setSelectedPlanningDate(null); setSelectedProjectDetailsId(project.id) }} style={[styles.dayDetailRow, inactiveStatuses.has(project.status) && styles.dayDetailDone]}>
                 <Text style={styles.dayDetailIcon}>R</Text>
@@ -422,6 +520,34 @@ export function MobileDashboard({ user }: { user: User }) {
                 <View style={styles.rowBody}><Text style={styles.rowTitle}>{item.reason}</Text><Text style={styles.rowMeta}>Dia indisponível</Text></View>
               </View>)}
               {!selectedDayTasks.length && !selectedDayProjects.length && !selectedDayUnavailable.length ? <View style={styles.dayEmpty}><Text style={styles.dayEmptyIcon}>○</Text><Text style={styles.sectionTitle}>Nada planejado</Text><Text style={styles.emptyText}>Este dia está livre no seu ateliê.</Text></View> : null}
+              <Pressable onPress={() => { const date = selectedPlanningDate || summary.today; setSelectedPlanningDate(null); openNewTask(date) }} style={styles.addTaskDayButton}><Text style={styles.addTaskDayButtonText}>＋ Adicionar tarefa neste dia</Text></Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal animationType="slide" onRequestClose={() => setTaskForm(null)} transparent visible={Boolean(taskForm)}>
+        <View style={styles.menuBackdrop}>
+          <View style={styles.taskFormSheet}>
+            <View style={styles.menuHeading}>
+              <View style={styles.projectDetailsHeading}><Text style={styles.sectionKicker}>{taskForm?.id ? 'EDITAR TAREFA' : 'NOVA TAREFA'}</Text><Text style={styles.menuTitle}>{taskForm?.id ? 'Editar planejamento' : 'Adicionar ao planejamento'}</Text></View>
+              <Pressable accessibilityLabel="Fechar formulário" onPress={() => setTaskForm(null)} style={styles.menuClose}><Text style={styles.menuCloseText}>×</Text></Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.formLabel}>TAREFA</Text>
+              <TextInput onChangeText={(title) => setTaskForm((current) => current ? { ...current, title } : current)} placeholder="Ex.: Terminar gatinhos" placeholderTextColor="#B69B91" style={styles.formInput} value={taskForm?.title || ''} />
+              <Text style={styles.formLabel}>PERÍODO</Text>
+              <View style={styles.dateInputRow}>
+                <View style={styles.dateInputGroup}><Text style={styles.dateInputCaption}>Início</Text><TextInput keyboardType="number-pad" maxLength={10} onChangeText={(startDate) => setTaskForm((current) => current ? { ...current, startDate: maskInputDate(startDate) } : current)} placeholder="DD/MM/AAAA" placeholderTextColor="#B69B91" style={styles.formInput} value={taskForm?.startDate || ''} /></View>
+                <View style={styles.dateInputGroup}><Text style={styles.dateInputCaption}>Término</Text><TextInput keyboardType="number-pad" maxLength={10} onChangeText={(endDate) => setTaskForm((current) => current ? { ...current, endDate: maskInputDate(endDate) } : current)} placeholder="DD/MM/AAAA" placeholderTextColor="#B69B91" style={styles.formInput} value={taskForm?.endDate || ''} /></View>
+              </View>
+              <Text style={styles.formLabel}>PRIORIDADE</Text>
+              <View style={styles.priorityOptions}>{['Baixa', 'Média', 'Alta'].map((priority) => <Pressable key={priority} onPress={() => setTaskForm((current) => current ? { ...current, priority } : current)} style={[styles.priorityOption, taskForm?.priority === priority && styles.priorityOptionActive]}><Text style={[styles.priorityOptionText, taskForm?.priority === priority && styles.priorityOptionTextActive]}>{priority}</Text></Pressable>)}</View>
+              <Text style={styles.formLabel}>PROJETO RELACIONADO</Text>
+              <Pressable onPress={() => setTaskForm((current) => current ? { ...current, projectId: '' } : current)} style={[styles.formProjectOption, !taskForm?.projectId && styles.formProjectOptionActive]}><Text style={styles.formProjectText}>Tarefa geral do ateliê</Text>{!taskForm?.projectId ? <Text style={styles.statusCheck}>✓</Text> : null}</Pressable>
+              {projects.filter((project) => !inactiveStatuses.has(project.status)).map((project) => <Pressable key={project.id} onPress={() => setTaskForm((current) => current ? { ...current, projectId: project.id } : current)} style={[styles.formProjectOption, taskForm?.projectId === project.id && styles.formProjectOptionActive]}><Text style={styles.formProjectText}>{project.title}</Text>{taskForm?.projectId === project.id ? <Text style={styles.statusCheck}>✓</Text> : null}</Pressable>)}
+              {taskFormError ? <Text style={styles.formError}>{taskFormError}</Text> : null}
+              <Pressable disabled={savingTask} onPress={saveTaskForm} style={({ pressed }) => [styles.saveTaskButton, (pressed || savingTask) && styles.buttonPressed]}>{savingTask ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>{taskForm?.id ? 'Salvar alterações' : 'Adicionar tarefa'}</Text>}</Pressable>
             </ScrollView>
           </View>
         </View>
@@ -595,7 +721,7 @@ export function MobileDashboard({ user }: { user: User }) {
           <View style={styles.planningListDivider} />
           <View style={styles.sectionHeading}>
             <View><Text style={styles.sectionKicker}>TAREFAS DO MÊS</Text><Text style={styles.sectionTitle}>Lista do ateliê</Text></View>
-            <Text style={styles.countBadge}>{planningPendingTasks.length}</Text>
+            <View style={styles.planningHeadingActions}><Text style={styles.countBadge}>{planningPendingTasks.length}</Text><Pressable accessibilityLabel="Adicionar tarefa" onPress={() => openNewTask()} style={styles.addTaskButton}><Text style={styles.addTaskButtonText}>＋</Text></Pressable></View>
           </View>
           {planningPendingTasks.length ? planningPendingTasks.map((task) => {
             const linkedProject = projects.find((project) => project.id === task.projectId)
@@ -608,6 +734,7 @@ export function MobileDashboard({ user }: { user: User }) {
                 <Text style={[styles.rowTitle, isLate && styles.warningText]}>{task.title}</Text>
                 <Text style={styles.rowMeta}>{formatShortDate(task.date)}{task.endDate && task.endDate !== task.date ? ` até ${formatShortDate(task.endDate)}` : ''}{linkedProject ? ` · ${linkedProject.title}` : ''}</Text>
               </View>
+              <Pressable accessibilityLabel={`Editar ${task.title}`} onPress={() => openEditTask(task)} style={styles.editTaskButton}><Text style={styles.editGlyph}>✎</Text></Pressable>
               {isLate ? <Text style={styles.lateText}>ATRASADA</Text> : <Text style={styles.priorityText}>{task.priority}</Text>}
             </View>
           }) : <Text style={styles.emptyText}>Nenhuma tarefa pendente neste mês ✨</Text>}
@@ -699,6 +826,30 @@ const styles = StyleSheet.create({
   dayDetailIcon: { width: 31, color: '#D77F8B', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 18, fontWeight: '800' },
   dayEmpty: { minHeight: 170, alignItems: 'center', justifyContent: 'center' },
   dayEmptyIcon: { marginBottom: 6, color: '#DDB8B4', fontSize: 35 },
+  addTaskDayButton: { minHeight: 47, alignItems: 'center', justifyContent: 'center', marginTop: 9, borderRadius: 12, backgroundColor: '#F7DDDC' },
+  addTaskDayButtonText: { color: '#8B6252', fontSize: 11, fontWeight: '900' },
+  taskFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
+  formLabel: { marginTop: 13, marginBottom: 7, color: '#9A7D72', fontSize: 8, fontWeight: '900', letterSpacing: 0.7 },
+  formInput: { minHeight: 48, paddingHorizontal: 13, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 12, backgroundColor: '#FFF7F6', color: '#704B3D', fontSize: 12 },
+  dateInputRow: { flexDirection: 'row', gap: 9 },
+  dateInputGroup: { flex: 1 },
+  dateInputCaption: { marginBottom: 5, color: '#A48A80', fontSize: 8, fontWeight: '700' },
+  priorityOptions: { flexDirection: 'row', gap: 7 },
+  priorityOption: { flex: 1, minHeight: 43, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 11, backgroundColor: '#FFF7F6' },
+  priorityOptionActive: { borderColor: '#D77F8B', backgroundColor: '#F8E3E2' },
+  priorityOptionText: { color: '#9A7D72', fontSize: 10, fontWeight: '800' },
+  priorityOptionTextActive: { color: '#704B3D' },
+  formProjectOption: { minHeight: 45, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, marginBottom: 6, borderWidth: 1, borderColor: '#EEE0DE', borderRadius: 11 },
+  formProjectOptionActive: { borderColor: '#E6A2AA', backgroundColor: '#FBE8E7' },
+  formProjectText: { flex: 1, color: '#704B3D', fontSize: 10, fontWeight: '700' },
+  formError: { marginTop: 10, color: '#B84D5C', fontSize: 10, fontWeight: '800' },
+  saveTaskButton: { minHeight: 49, alignItems: 'center', justifyContent: 'center', marginTop: 16, borderRadius: 12, backgroundColor: '#9A6B56' },
+  saveTaskButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  planningHeadingActions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  addTaskButton: { width: 31, height: 31, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#D77F8B' },
+  addTaskButtonText: { color: '#FFFFFF', fontSize: 19, lineHeight: 21, fontWeight: '500' },
+  editTaskButton: { width: 31, height: 31, alignItems: 'center', justifyContent: 'center', marginHorizontal: 5, borderRadius: 10, backgroundColor: '#FFF0EF' },
+  editGlyph: { color: '#D77F8B', fontSize: 15, fontWeight: '900' },
   monthNavigator: { minHeight: 64, flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5, borderRadius: 15, backgroundColor: '#FFF5F4' },
   monthButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#F7DDDC' },
   monthButtonText: { color: '#9A6B56', fontSize: 30, lineHeight: 32, fontWeight: '500' },
