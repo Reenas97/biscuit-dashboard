@@ -278,6 +278,7 @@ export function MobileDashboard({ user }: { user: User }) {
   }
 
   return (
+    <View style={styles.screen}>
     <ScrollView contentContainerStyle={styles.dashboard} showsVerticalScrollIndicator={false}>
       <View style={styles.brandRow}>
         <View style={styles.logoMark}><Text style={styles.logoLetter}>R</Text></View>
@@ -522,23 +523,24 @@ export function MobileDashboard({ user }: { user: User }) {
         </View>
       )}
 
+      <Pressable onPress={() => signOut(auth)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
+        <Text style={styles.secondaryButtonText}>Sair da conta</Text>
+      </Pressable>
+      <Text style={styles.footer}>Sincronizado com o Reena Biscuit ☁</Text>
+    </ScrollView>
       <View style={styles.bottomNavigation}>
         <Pressable onPress={() => openPage('home')} style={[styles.navItem, activePage === 'home' && styles.navItemActive]}><Text style={styles.navIcon}>⌂</Text><Text style={styles.navText}>Início</Text></Pressable>
         <Pressable onPress={() => openPage('projects')} style={[styles.navItem, activePage === 'projects' && styles.navItemActive]}><Text style={styles.navIcon}>▦</Text><Text style={styles.navText}>Projetos</Text></Pressable>
         <Pressable onPress={() => openPage('planning')} style={[styles.navItem, activePage === 'planning' && styles.navItemActive]}><Text style={styles.navIcon}>✓</Text><Text style={styles.navText}>Planejamento</Text></Pressable>
         <Pressable onPress={() => setMenuOpen(true)} style={styles.navItem}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
       </View>
-
-      <Pressable onPress={() => signOut(auth)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
-        <Text style={styles.secondaryButtonText}>Sair da conta</Text>
-      </Pressable>
-      <Text style={styles.footer}>Sincronizado com o Reena Biscuit ☁</Text>
-    </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  dashboard: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 38 },
+  screen: { flex: 1, backgroundColor: '#F8EEEE' },
+  dashboard: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24 },
   brandRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
   brandText: { flex: 1, marginLeft: 10 },
   logoMark: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E59AA3', borderRadius: 22, backgroundColor: '#FFF8F7' },
@@ -651,7 +653,7 @@ const styles = StyleSheet.create({
   warningText: { color: '#B84D5C' },
   countBadge: { minWidth: 25, paddingHorizontal: 7, paddingVertical: 5, overflow: 'hidden', borderRadius: 13, backgroundColor: '#F7DDDC', color: '#8B6252', fontSize: 9, fontWeight: '900', textAlign: 'center' },
   emptyText: { marginTop: 14, color: '#A48A80', fontSize: 11 },
-  bottomNavigation: { flexDirection: 'row', marginTop: 16, padding: 6, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 18, backgroundColor: '#FFFBFA' },
+  bottomNavigation: { flexDirection: 'row', marginHorizontal: 12, marginTop: 6, marginBottom: 8, padding: 6, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 18, backgroundColor: '#FFFBFA', shadowColor: '#704B3D', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.08, shadowRadius: 9, elevation: 8 },
   navItem: { flex: 1, minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 13 },
   navItemActive: { backgroundColor: '#F8E3E2' },
   navIcon: { color: '#D77F8B', fontSize: 17, fontWeight: '800' },
