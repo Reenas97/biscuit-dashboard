@@ -12,9 +12,20 @@ export function CloudSync() {
   useEffect(() => {
     if (!user) return
     let active = true
+    const reloadMarker = `reena-cloud-sync-reloaded:${user.uid}`
     initializeCloudData(user).then((changed) => {
       if (!active) return
-      if (changed) { window.dispatchEvent(new Event(settingsEvent)); window.location.reload(); return }
+      if (changed && sessionStorage.getItem(reloadMarker) !== '1') {
+        sessionStorage.setItem(reloadMarker, '1')
+        window.dispatchEvent(new Event(settingsEvent))
+        window.location.reload()
+        return
+      }
+      sessionStorage.removeItem(reloadMarker)
+      if (changed) {
+        window.dispatchEvent(new Event(settingsEvent))
+        window.dispatchEvent(new Event(dataChangedEvent))
+      }
       ready.current = true; setStatus('ready')
     }).catch(() => { if (active) setStatus('error') })
 

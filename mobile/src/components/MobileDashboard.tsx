@@ -97,7 +97,7 @@ export function MobileDashboard({ user }: { user: User }) {
   const { items: tasks, ready: tasksReady } = useUserCollection<Task>(user.uid, 'tasks')
   const { items: timeEntries, ready: timeReady } = useUserCollection<TimeEntry>(user.uid, 'timeEntries')
   const [settings, setSettings] = useState<AtelierSettings>({})
-  const [now, setNow] = useState(Date.now())
+  const [now, setNow] = useState(() => Date.now())
   const [activePage, setActivePage] = useState<MobilePage>('home')
   const [menuOpen, setMenuOpen] = useState(false)
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null)

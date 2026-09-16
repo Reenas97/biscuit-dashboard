@@ -4,6 +4,7 @@ import {
   getDoc,
   serverTimestamp,
   setDoc,
+  Timestamp,
   writeBatch,
 } from 'firebase/firestore'
 import type { User } from 'firebase/auth'
@@ -66,6 +67,19 @@ function canonicalize(value: unknown): unknown {
   return value
 }
 
+function normalizeCloudValue(value: unknown): unknown {
+  if (value instanceof Timestamp) return value.toDate().toISOString()
+  if (Array.isArray(value)) return value.map(normalizeCloudValue)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, item]) => item !== undefined)
+        .map(([key, item]) => [key, normalizeCloudValue(item)]),
+    )
+  }
+  return value
+}
+
 function hasSameJson(currentValue: string | null, nextValue: unknown) {
   if (!currentValue) return false
   try {
@@ -96,7 +110,9 @@ async function readCollection(user: User, config: CollectionConfig) {
   const index = await getDoc(doc(reference, '_index'))
   const ids = Array.isArray(index.data()?.ids) ? index.data()?.ids as string[] : []
   const documents = await Promise.all(ids.map((id) => getDoc(doc(reference, id))))
-  return documents.filter((item) => item.exists()).map((item) => item.data())
+  return documents
+    .filter((item) => item.exists())
+    .map((item) => normalizeCloudValue(item.data()) as Record<string, unknown>)
 }
 
 async function migrateLegacyData(user: User) {
@@ -157,7 +173,7 @@ export async function initializeCloudData(user: User) {
 
   const settings = await getDoc(doc(db, 'users', user.uid, 'settings', 'atelier'))
   if (settings.exists()) {
-    const settingsData = { ...settings.data() }
+    const settingsData = normalizeCloudValue(settings.data()) as Record<string, unknown>
     delete settingsData.updatedAt
     const nextValue = JSON.stringify(settingsData)
     if (!hasSameJson(localStorage.getItem(settingsStorageKey), settingsData)) {
