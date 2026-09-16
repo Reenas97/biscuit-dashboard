@@ -82,11 +82,31 @@ type ClientForm = {
   notes: string
 }
 
+type Material = {
+  id: string
+  name: string
+  category: string
+  unit: string
+  stock: number
+  minimumStock: number
+  unitCost: number
+}
+
+type MaterialForm = {
+  id?: string
+  name: string
+  category: string
+  unit: string
+  stock: string
+  minimumStock: string
+  unitCost: string
+}
+
 type AtelierSettings = {
   ownerName?: string
 }
 
-type MobilePage = 'home' | 'projects' | 'planning' | 'clients'
+type MobilePage = 'home' | 'projects' | 'planning' | 'clients' | 'materials'
 
 const inactiveStatuses = new Set(['Stand by', 'Pronto', 'Entregue'])
 const projectStatuses = ['Planejamento', 'Stand by', 'Modelagem', 'Secagem', 'Pintura', 'Finalização', 'Envernização', 'Pronto', 'Entregue']
@@ -159,6 +179,7 @@ export function MobileDashboard({ user }: { user: User }) {
   const { items: timeEntries, ready: timeReady } = useUserCollection<TimeEntry>(user.uid, 'timeEntries')
   const { items: unavailableDays, ready: unavailableReady } = useUserCollection<UnavailableDay>(user.uid, 'unavailableDays')
   const { items: clients, ready: clientsReady } = useUserCollection<Client>(user.uid, 'clients')
+  const { items: materials, ready: materialsReady } = useUserCollection<Material>(user.uid, 'materials')
   const [settings, setSettings] = useState<AtelierSettings>({})
   const [now, setNow] = useState(() => Date.now())
   const [activePage, setActivePage] = useState<MobilePage>('home')
@@ -186,6 +207,10 @@ export function MobileDashboard({ user }: { user: User }) {
   const [clientForm, setClientForm] = useState<ClientForm | null>(null)
   const [clientFormError, setClientFormError] = useState('')
   const [savingClient, setSavingClient] = useState(false)
+  const [materialQuery, setMaterialQuery] = useState('')
+  const [materialForm, setMaterialForm] = useState<MaterialForm | null>(null)
+  const [materialFormError, setMaterialFormError] = useState('')
+  const [savingMaterial, setSavingMaterial] = useState(false)
 
   useEffect(() => onSnapshot(doc(db, 'users', user.uid, 'settings', 'atelier'), (snapshot) => {
     if (snapshot.exists()) setSettings(snapshot.data() as AtelierSettings)
@@ -235,7 +260,7 @@ export function MobileDashboard({ user }: { user: User }) {
     ? Math.max(0, Math.floor((now - new Date(activeEntry.startedAt).getTime()) / 1000))
     : 0
   const ownerFirstName = settings.ownerName?.trim().split(/\s+/)[0] || 'Renata'
-  const loading = !projectsReady || !tasksReady || !timeReady || !unavailableReady || !clientsReady
+  const loading = !projectsReady || !tasksReady || !timeReady || !unavailableReady || !clientsReady || !materialsReady
   const timerProjects = summary.activeProjects
   const selectedProject = timerProjects.find((project) => project.id === selectedProjectId)
   const selectedProjectDetails = projects.find((project) => project.id === selectedProjectDetailsId) ?? null
@@ -275,11 +300,22 @@ export function MobileDashboard({ user }: { user: User }) {
     return sorted.filter((client) => [client.name, client.phone, client.instagram, client.email]
       .some((value) => value?.toLocaleLowerCase('pt-BR').includes(query)))
   }, [clientQuery, clients])
+  const filteredMaterials = useMemo(() => {
+    const query = materialQuery.trim().toLocaleLowerCase('pt-BR')
+    const sorted = [...materials].sort((first, second) => first.name.localeCompare(second.name, 'pt-BR'))
+    if (!query) return sorted
+    return sorted.filter((material) => [material.name, material.category, material.unit]
+      .some((value) => value.toLocaleLowerCase('pt-BR').includes(query)))
+  }, [materialQuery, materials])
+  const lowStockMaterials = materials.filter((material) => material.stock <= material.minimumStock)
+  const totalStockValue = materials.reduce((sum, material) => sum + material.stock * material.unitCost, 0)
   const pageMeta = activePage === 'projects'
     ? { kicker: '🐾 PRODUÇÃO', title: 'Projetos', subtitle: 'Acompanhe todas as etapas das suas peças.' }
     : activePage === 'planning'
       ? { kicker: '✓ ROTINA DO ATELIÊ', title: 'Planejamento', subtitle: 'Veja tarefas, prazos e o que precisa da sua atenção.' }
-      : { kicker: '♡ CLIENTES DO ATELIÊ', title: 'Clientes', subtitle: 'Contatos e histórico de quem encomenda suas peças.' }
+      : activePage === 'clients'
+        ? { kicker: '♡ CLIENTES DO ATELIÊ', title: 'Clientes', subtitle: 'Contatos e histórico de quem encomenda suas peças.' }
+        : { kicker: '□ ESTOQUE DO ATELIÊ', title: 'Materiais', subtitle: 'Controle quantidades, custos e o que precisa ser reposto.' }
 
   function openPage(page: MobilePage) {
     setActivePage(page)
@@ -459,6 +495,46 @@ export function MobileDashboard({ user }: { user: User }) {
     }
   }
 
+  function openNewMaterial() {
+    setMaterialFormError('')
+    setMaterialForm({ name: '', category: '', unit: 'g', stock: '', minimumStock: '', unitCost: '' })
+  }
+
+  function openEditMaterial(material: Material) {
+    setMaterialFormError('')
+    setMaterialForm({ id: material.id, name: material.name, category: material.category, unit: material.unit, stock: String(material.stock), minimumStock: String(material.minimumStock), unitCost: String(material.unitCost) })
+  }
+
+  async function saveMaterialForm() {
+    if (!materialForm || savingMaterial) return
+    const stock = Number(materialForm.stock.replace(',', '.'))
+    const minimumStock = Number(materialForm.minimumStock.replace(',', '.'))
+    const unitCost = Number(materialForm.unitCost.replace(',', '.'))
+    if (!materialForm.name.trim() || !materialForm.category.trim()) { setMaterialFormError('Informe o nome e a categoria do material.'); return }
+    if ([stock, minimumStock, unitCost].some((value) => !Number.isFinite(value) || value < 0)) { setMaterialFormError('Preencha estoque, mínimo e custo com valores válidos.'); return }
+    setSavingMaterial(true)
+    setMaterialFormError('')
+    const data = { name: materialForm.name.trim(), category: materialForm.category.trim(), unit: materialForm.unit, stock, minimumStock, unitCost }
+    try {
+      if (materialForm.id) {
+        await updateDoc(doc(db, 'users', user.uid, 'materials', materialForm.id), data)
+      } else {
+        const materialId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+        const batch = writeBatch(db)
+        batch.set(doc(db, 'users', user.uid, 'materials', materialId), { id: materialId, ...data, createdAt: new Date().toISOString() })
+        batch.set(doc(db, 'users', user.uid, 'materials', '_index'), { ids: arrayUnion(materialId), updatedAt: serverTimestamp() }, { merge: true })
+        await batch.commit()
+      }
+      setMaterialForm(null)
+      setActionMessage(materialForm.id ? 'Material atualizado.' : 'Material cadastrado.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setMaterialFormError('Não foi possível salvar o material. Tente novamente.')
+    } finally {
+      setSavingMaterial(false)
+    }
+  }
+
   async function startTimer() {
     if (!selectedProject || activeEntry || timerBusy) return
     setTimerBusy(true)
@@ -576,6 +652,7 @@ export function MobileDashboard({ user }: { user: User }) {
             <Pressable onPress={() => openPage('projects')} style={[styles.menuItem, activePage === 'projects' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>▦</Text><Text style={styles.menuItemText}>Projetos</Text></Pressable>
             <Pressable onPress={() => openPage('planning')} style={[styles.menuItem, activePage === 'planning' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>✓</Text><Text style={styles.menuItemText}>Planejamento</Text></Pressable>
             <Pressable onPress={() => openPage('clients')} style={[styles.menuItem, activePage === 'clients' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>♡</Text><Text style={styles.menuItemText}>Clientes</Text></Pressable>
+            <Pressable onPress={() => openPage('materials')} style={[styles.menuItem, activePage === 'materials' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>□</Text><Text style={styles.menuItemText}>Materiais</Text></Pressable>
             <View style={styles.menuDivider} />
             <View style={styles.menuSync}><View style={styles.liveDot} /><Text style={styles.menuSyncText}>Firebase conectado e sincronizado</Text></View>
             <Pressable onPress={() => signOut(auth)} style={styles.menuLogout}><Text style={styles.menuLogoutText}>Sair da conta</Text></Pressable>
@@ -729,6 +806,33 @@ export function MobileDashboard({ user }: { user: User }) {
               <TextInput multiline numberOfLines={4} onChangeText={(notes) => setClientForm((current) => current ? { ...current, notes } : current)} placeholder="Preferências, datas importantes ou outros detalhes..." placeholderTextColor="#B69B91" style={[styles.formInput, styles.reasonInput]} textAlignVertical="top" value={clientForm?.notes || ''} />
               {clientFormError ? <Text style={styles.formError}>{clientFormError}</Text> : null}
               <Pressable disabled={savingClient} onPress={saveClientForm} style={({ pressed }) => [styles.saveTaskButton, (pressed || savingClient) && styles.buttonPressed]}>{savingClient ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>{clientForm?.id ? 'Salvar alterações' : 'Cadastrar cliente'}</Text>}</Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal animationType="slide" onRequestClose={() => setMaterialForm(null)} transparent visible={Boolean(materialForm)}>
+        <View style={styles.menuBackdrop}>
+          <View style={styles.materialFormSheet}>
+            <View style={styles.menuHeading}>
+              <View style={styles.projectDetailsHeading}><Text style={styles.sectionKicker}>{materialForm?.id ? 'ATUALIZAR MATERIAL' : 'NOVO MATERIAL'}</Text><Text style={styles.menuTitle}>{materialForm?.id ? 'Editar material' : 'Cadastrar material'}</Text></View>
+              <Pressable accessibilityLabel="Fechar formulário" onPress={() => setMaterialForm(null)} style={styles.menuClose}><Text style={styles.menuCloseText}>×</Text></Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.formLabel}>NOME DO MATERIAL</Text>
+              <TextInput onChangeText={(name) => setMaterialForm((current) => current ? { ...current, name } : current)} placeholder="Ex.: Massa branca" placeholderTextColor="#B69B91" style={styles.formInput} value={materialForm?.name || ''} />
+              <Text style={styles.formLabel}>CATEGORIA</Text>
+              <TextInput onChangeText={(category) => setMaterialForm((current) => current ? { ...current, category } : current)} placeholder="Ex.: Massa" placeholderTextColor="#B69B91" style={styles.formInput} value={materialForm?.category || ''} />
+              <Text style={styles.formLabel}>UNIDADE DE MEDIDA</Text>
+              <View style={styles.unitOptions}>{['g', 'kg', 'ml', 'l', 'cm', 'un'].map((unit) => <Pressable key={unit} onPress={() => setMaterialForm((current) => current ? { ...current, unit } : current)} style={[styles.unitOption, materialForm?.unit === unit && styles.unitOptionActive]}><Text style={[styles.unitOptionText, materialForm?.unit === unit && styles.unitOptionTextActive]}>{unit}</Text></Pressable>)}</View>
+              <View style={styles.materialNumberRow}>
+                <View style={styles.dateInputGroup}><Text style={styles.formLabel}>ESTOQUE ATUAL</Text><TextInput keyboardType="decimal-pad" onChangeText={(stock) => setMaterialForm((current) => current ? { ...current, stock } : current)} placeholder="0" placeholderTextColor="#B69B91" style={styles.formInput} value={materialForm?.stock || ''} /></View>
+                <View style={styles.dateInputGroup}><Text style={styles.formLabel}>ESTOQUE MÍNIMO</Text><TextInput keyboardType="decimal-pad" onChangeText={(minimumStock) => setMaterialForm((current) => current ? { ...current, minimumStock } : current)} placeholder="0" placeholderTextColor="#B69B91" style={styles.formInput} value={materialForm?.minimumStock || ''} /></View>
+              </View>
+              <Text style={styles.formLabel}>CUSTO POR UNIDADE</Text>
+              <TextInput keyboardType="decimal-pad" onChangeText={(unitCost) => setMaterialForm((current) => current ? { ...current, unitCost } : current)} placeholder="0,00" placeholderTextColor="#B69B91" style={styles.formInput} value={materialForm?.unitCost || ''} />
+              {materialFormError ? <Text style={styles.formError}>{materialFormError}</Text> : null}
+              <Pressable disabled={savingMaterial} onPress={saveMaterialForm} style={({ pressed }) => [styles.saveTaskButton, (pressed || savingMaterial) && styles.buttonPressed]}>{savingMaterial ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>{materialForm?.id ? 'Salvar alterações' : 'Cadastrar material'}</Text>}</Pressable>
             </ScrollView>
           </View>
         </View>
@@ -932,7 +1036,7 @@ export function MobileDashboard({ user }: { user: User }) {
             ))}
           </View> : null}
         </View>
-      ) : (
+      ) : activePage === 'clients' ? (
         <View>
           <View style={styles.clientsToolbar}>
             <TextInput autoCapitalize="none" onChangeText={setClientQuery} placeholder="Buscar por nome ou contato" placeholderTextColor="#B69B91" style={styles.clientSearchInput} value={clientQuery} />
@@ -953,6 +1057,30 @@ export function MobileDashboard({ user }: { user: User }) {
             </Pressable>
           }) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>♡</Text><Text style={styles.sectionTitle}>{clientQuery ? 'Nenhuma cliente encontrada' : 'Nenhuma cliente cadastrada'}</Text><Text style={styles.emptyText}>{clientQuery ? 'Tente buscar por outro nome ou contato.' : 'Toque no botão + para cadastrar a primeira cliente.'}</Text></View>}
         </View>
+      ) : (
+        <View>
+          <View style={styles.materialSummaryRow}>
+            <View style={styles.materialSummaryCard}><Text style={styles.materialSummaryValue}>{materials.length}</Text><Text style={styles.materialSummaryLabel}>Cadastrados</Text></View>
+            <View style={[styles.materialSummaryCard, lowStockMaterials.length > 0 && styles.materialSummaryLow]}><Text style={[styles.materialSummaryValue, lowStockMaterials.length > 0 && styles.warningText]}>{lowStockMaterials.length}</Text><Text style={styles.materialSummaryLabel}>Estoque baixo</Text></View>
+            <View style={styles.materialSummaryCard}><Text numberOfLines={1} adjustsFontSizeToFit style={styles.materialSummaryMoney}>{totalStockValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Text><Text style={styles.materialSummaryLabel}>Valor total</Text></View>
+          </View>
+          <View style={styles.clientsToolbar}>
+            <TextInput autoCapitalize="none" onChangeText={setMaterialQuery} placeholder="Buscar material ou categoria" placeholderTextColor="#B69B91" style={styles.clientSearchInput} value={materialQuery} />
+            <Pressable accessibilityLabel="Cadastrar material" onPress={openNewMaterial} style={styles.newClientButton}><Text style={styles.newClientButtonText}>＋</Text></Pressable>
+          </View>
+          {filteredMaterials.length ? filteredMaterials.map((material) => {
+            const isLow = material.stock <= material.minimumStock
+            return <Pressable key={material.id} onPress={() => openEditMaterial(material)} style={({ pressed }) => [styles.materialCard, isLow && styles.materialCardLow, pressed && styles.projectRowPressed]}>
+              <View style={[styles.materialIcon, isLow && styles.materialIconLow]}><Text style={styles.materialIconText}>□</Text></View>
+              <View style={styles.rowBody}>
+                <Text style={styles.materialCategory}>{material.category || 'Sem categoria'}</Text>
+                <Text style={styles.materialName}>{material.name}</Text>
+                <View style={styles.materialNumbers}><Text style={[styles.materialStock, isLow && styles.warningText]}>{material.stock.toLocaleString('pt-BR')} {material.unit}</Text><Text style={styles.materialMeta}>mín. {material.minimumStock.toLocaleString('pt-BR')} · {material.unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/{material.unit}</Text></View>
+              </View>
+              {isLow ? <Text style={styles.lowStockBadge}>BAIXO</Text> : <Text style={styles.editGlyph}>✎</Text>}
+            </Pressable>
+          }) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>□</Text><Text style={styles.sectionTitle}>{materialQuery ? 'Nenhum material encontrado' : 'Nenhum material cadastrado'}</Text><Text style={styles.emptyText}>{materialQuery ? 'Tente buscar por outro nome ou categoria.' : 'Toque no botão + para cadastrar o primeiro material.'}</Text></View>}
+        </View>
       )}
 
       <Pressable onPress={() => signOut(auth)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
@@ -964,7 +1092,7 @@ export function MobileDashboard({ user }: { user: User }) {
         <Pressable onPress={() => openPage('home')} style={[styles.navItem, activePage === 'home' && styles.navItemActive]}><Text style={styles.navIcon}>⌂</Text><Text style={styles.navText}>Início</Text></Pressable>
         <Pressable onPress={() => openPage('projects')} style={[styles.navItem, activePage === 'projects' && styles.navItemActive]}><Text style={styles.navIcon}>▦</Text><Text style={styles.navText}>Projetos</Text></Pressable>
         <Pressable onPress={() => openPage('planning')} style={[styles.navItem, activePage === 'planning' && styles.navItemActive]}><Text style={styles.navIcon}>✓</Text><Text style={styles.navText}>Planejamento</Text></Pressable>
-        <Pressable onPress={() => setMenuOpen(true)} style={[styles.navItem, activePage === 'clients' && styles.navItemActive]}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
+        <Pressable onPress={() => setMenuOpen(true)} style={[styles.navItem, (activePage === 'clients' || activePage === 'materials') && styles.navItemActive]}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
       </View>
     </View>
   )
@@ -1037,6 +1165,7 @@ const styles = StyleSheet.create({
   taskFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   unavailableFormSheet: { paddingHorizontal: 20, paddingTop: 21, paddingBottom: 30, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   clientFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
+  materialFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   formLabel: { marginTop: 13, marginBottom: 7, color: '#9A7D72', fontSize: 8, fontWeight: '900', letterSpacing: 0.7 },
   formInput: { minHeight: 48, paddingHorizontal: 13, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 12, backgroundColor: '#FFF7F6', color: '#704B3D', fontSize: 12 },
   dateInputRow: { flexDirection: 'row', gap: 9 },
@@ -1074,6 +1203,29 @@ const styles = StyleSheet.create({
   clientContact: { marginTop: 4, color: '#D77F8B', fontSize: 9, fontWeight: '800' },
   clientNotes: { marginTop: 5, color: '#9A7D72', fontSize: 9, lineHeight: 13 },
   clientEmpty: { minHeight: 240, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
+  unitOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  unitOption: { width: '30%', minHeight: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 11, backgroundColor: '#FFF7F6' },
+  unitOptionActive: { borderColor: '#D77F8B', backgroundColor: '#F8E3E2' },
+  unitOptionText: { color: '#9A7D72', fontSize: 10, fontWeight: '900' },
+  unitOptionTextActive: { color: '#704B3D' },
+  materialNumberRow: { flexDirection: 'row', gap: 9 },
+  materialSummaryRow: { flexDirection: 'row', gap: 7, marginTop: 12 },
+  materialSummaryCard: { flex: 1, minHeight: 83, justifyContent: 'space-between', padding: 11, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 15, backgroundColor: '#FFFBFA' },
+  materialSummaryLow: { borderColor: '#EAA0A0', backgroundColor: '#FFF2F1' },
+  materialSummaryValue: { color: '#D77F8B', fontSize: 21, fontWeight: '900' },
+  materialSummaryMoney: { color: '#9A6B56', fontSize: 13, fontWeight: '900' },
+  materialSummaryLabel: { color: '#8B6252', fontSize: 7, fontWeight: '800' },
+  materialCard: { minHeight: 91, flexDirection: 'row', alignItems: 'center', padding: 14, marginTop: 10, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 17, backgroundColor: '#FFFBFA' },
+  materialCardLow: { borderColor: '#EAA0A0', backgroundColor: '#FFF8F7' },
+  materialIcon: { width: 43, height: 43, alignItems: 'center', justifyContent: 'center', marginRight: 12, borderRadius: 13, backgroundColor: '#F7DDDC' },
+  materialIconLow: { backgroundColor: '#FDE0DF' },
+  materialIconText: { color: '#D77F8B', fontSize: 21, fontWeight: '900' },
+  materialCategory: { color: '#D77F8B', fontSize: 7, fontWeight: '900', letterSpacing: 0.5, textTransform: 'uppercase' },
+  materialName: { marginTop: 3, color: '#704B3D', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 15 },
+  materialNumbers: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 6 },
+  materialStock: { color: '#55795E', fontSize: 10, fontWeight: '900' },
+  materialMeta: { color: '#A48A80', fontSize: 8 },
+  lowStockBadge: { paddingHorizontal: 7, paddingVertical: 5, overflow: 'hidden', borderRadius: 8, backgroundColor: '#FDE0DF', color: '#B84D5C', fontSize: 7, fontWeight: '900' },
   monthNavigator: { minHeight: 64, flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5, borderRadius: 15, backgroundColor: '#FFF5F4' },
   monthButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#F7DDDC' },
   monthButtonText: { color: '#9A6B56', fontSize: 30, lineHeight: 32, fontWeight: '500' },
