@@ -4,6 +4,7 @@ import { signOut } from 'firebase/auth'
 import { arrayRemove, arrayUnion, collection, deleteField, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import {
   ActivityIndicator,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -102,11 +103,34 @@ type MaterialForm = {
   unitCost: string
 }
 
+type Idea = {
+  id: string
+  title: string
+  description?: string
+  category: string
+  priority: string
+  tags?: string[]
+  link?: string
+  favorite?: boolean
+  tone?: 'pink' | 'brown' | 'blush'
+  converted?: boolean
+}
+
+type IdeaForm = {
+  id?: string
+  title: string
+  description: string
+  category: string
+  priority: string
+  tags: string
+  link: string
+}
+
 type AtelierSettings = {
   ownerName?: string
 }
 
-type MobilePage = 'home' | 'projects' | 'planning' | 'clients' | 'materials'
+type MobilePage = 'home' | 'projects' | 'planning' | 'clients' | 'materials' | 'ideas'
 
 const inactiveStatuses = new Set(['Stand by', 'Pronto', 'Entregue'])
 const projectStatuses = ['Planejamento', 'Stand by', 'Modelagem', 'Secagem', 'Pintura', 'Finalização', 'Envernização', 'Pronto', 'Entregue']
@@ -180,6 +204,7 @@ export function MobileDashboard({ user }: { user: User }) {
   const { items: unavailableDays, ready: unavailableReady } = useUserCollection<UnavailableDay>(user.uid, 'unavailableDays')
   const { items: clients, ready: clientsReady } = useUserCollection<Client>(user.uid, 'clients')
   const { items: materials, ready: materialsReady } = useUserCollection<Material>(user.uid, 'materials')
+  const { items: ideas, ready: ideasReady } = useUserCollection<Idea>(user.uid, 'ideas')
   const [settings, setSettings] = useState<AtelierSettings>({})
   const [now, setNow] = useState(() => Date.now())
   const [activePage, setActivePage] = useState<MobilePage>('home')
@@ -211,6 +236,12 @@ export function MobileDashboard({ user }: { user: User }) {
   const [materialForm, setMaterialForm] = useState<MaterialForm | null>(null)
   const [materialFormError, setMaterialFormError] = useState('')
   const [savingMaterial, setSavingMaterial] = useState(false)
+  const [ideaQuery, setIdeaQuery] = useState('')
+  const [showFavoriteIdeas, setShowFavoriteIdeas] = useState(false)
+  const [ideaForm, setIdeaForm] = useState<IdeaForm | null>(null)
+  const [ideaFormError, setIdeaFormError] = useState('')
+  const [savingIdea, setSavingIdea] = useState(false)
+  const [updatingFavoriteId, setUpdatingFavoriteId] = useState<string | null>(null)
 
   useEffect(() => onSnapshot(doc(db, 'users', user.uid, 'settings', 'atelier'), (snapshot) => {
     if (snapshot.exists()) setSettings(snapshot.data() as AtelierSettings)
@@ -260,7 +291,7 @@ export function MobileDashboard({ user }: { user: User }) {
     ? Math.max(0, Math.floor((now - new Date(activeEntry.startedAt).getTime()) / 1000))
     : 0
   const ownerFirstName = settings.ownerName?.trim().split(/\s+/)[0] || 'Renata'
-  const loading = !projectsReady || !tasksReady || !timeReady || !unavailableReady || !clientsReady || !materialsReady
+  const loading = !projectsReady || !tasksReady || !timeReady || !unavailableReady || !clientsReady || !materialsReady || !ideasReady
   const timerProjects = summary.activeProjects
   const selectedProject = timerProjects.find((project) => project.id === selectedProjectId)
   const selectedProjectDetails = projects.find((project) => project.id === selectedProjectDetailsId) ?? null
@@ -309,13 +340,23 @@ export function MobileDashboard({ user }: { user: User }) {
   }, [materialQuery, materials])
   const lowStockMaterials = materials.filter((material) => material.stock <= material.minimumStock)
   const totalStockValue = materials.reduce((sum, material) => sum + material.stock * material.unitCost, 0)
+  const filteredIdeas = useMemo(() => {
+    const query = ideaQuery.trim().toLocaleLowerCase('pt-BR')
+    return ideas.filter((idea) => {
+      const matchesFavorite = !showFavoriteIdeas || idea.favorite
+      const searchable = `${idea.title} ${idea.description || ''} ${idea.category} ${(idea.tags || []).join(' ')}`.toLocaleLowerCase('pt-BR')
+      return matchesFavorite && searchable.includes(query)
+    })
+  }, [ideaQuery, ideas, showFavoriteIdeas])
   const pageMeta = activePage === 'projects'
     ? { kicker: '🐾 PRODUÇÃO', title: 'Projetos', subtitle: 'Acompanhe todas as etapas das suas peças.' }
     : activePage === 'planning'
       ? { kicker: '✓ ROTINA DO ATELIÊ', title: 'Planejamento', subtitle: 'Veja tarefas, prazos e o que precisa da sua atenção.' }
       : activePage === 'clients'
         ? { kicker: '♡ CLIENTES DO ATELIÊ', title: 'Clientes', subtitle: 'Contatos e histórico de quem encomenda suas peças.' }
-        : { kicker: '□ ESTOQUE DO ATELIÊ', title: 'Materiais', subtitle: 'Controle quantidades, custos e o que precisa ser reposto.' }
+        : activePage === 'materials'
+          ? { kicker: '□ ESTOQUE DO ATELIÊ', title: 'Materiais', subtitle: 'Controle quantidades, custos e o que precisa ser reposto.' }
+          : { kicker: '✦ BANCO DE INSPIRAÇÕES', title: 'Ideias', subtitle: 'Guarde referências e organize suas próximas criações.' }
 
   function openPage(page: MobilePage) {
     setActivePage(page)
@@ -535,6 +576,60 @@ export function MobileDashboard({ user }: { user: User }) {
     }
   }
 
+  function openNewIdea() {
+    setIdeaFormError('')
+    setIdeaForm({ title: '', description: '', category: '', priority: 'Média', tags: '', link: '' })
+  }
+
+  function openEditIdea(idea: Idea) {
+    setIdeaFormError('')
+    setIdeaForm({ id: idea.id, title: idea.title, description: idea.description || '', category: idea.category, priority: idea.priority, tags: (idea.tags || []).join(', '), link: idea.link || '' })
+  }
+
+  async function saveIdeaForm() {
+    if (!ideaForm || savingIdea) return
+    if (!ideaForm.title.trim() || !ideaForm.category.trim()) { setIdeaFormError('Informe o nome e a categoria da ideia.'); return }
+    if (ideaForm.link.trim() && !/^https?:\/\//i.test(ideaForm.link.trim())) { setIdeaFormError('O link precisa começar com http:// ou https://'); return }
+    setSavingIdea(true)
+    setIdeaFormError('')
+    const data = {
+      title: ideaForm.title.trim(),
+      description: ideaForm.description.trim(),
+      category: ideaForm.category.trim(),
+      priority: ideaForm.priority,
+      tags: ideaForm.tags.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean),
+      link: ideaForm.link.trim(),
+    }
+    try {
+      if (ideaForm.id) {
+        await updateDoc(doc(db, 'users', user.uid, 'ideas', ideaForm.id), data)
+      } else {
+        const ideaId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+        const batch = writeBatch(db)
+        batch.set(doc(db, 'users', user.uid, 'ideas', ideaId), { id: ideaId, ...data, favorite: false, tone: ['pink', 'brown', 'blush'][ideas.length % 3], converted: false, createdAt: new Date().toISOString() })
+        batch.set(doc(db, 'users', user.uid, 'ideas', '_index'), { ids: arrayUnion(ideaId), updatedAt: serverTimestamp() }, { merge: true })
+        await batch.commit()
+      }
+      setIdeaForm(null)
+      setActionMessage(ideaForm.id ? 'Ideia atualizada.' : 'Ideia salva no seu banco de inspirações.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setIdeaFormError('Não foi possível salvar a ideia. Tente novamente.')
+    } finally {
+      setSavingIdea(false)
+    }
+  }
+
+  async function toggleIdeaFavorite(idea: Idea) {
+    if (updatingFavoriteId) return
+    setUpdatingFavoriteId(idea.id)
+    try {
+      await updateDoc(doc(db, 'users', user.uid, 'ideas', idea.id), { favorite: !idea.favorite })
+    } finally {
+      setUpdatingFavoriteId(null)
+    }
+  }
+
   async function startTimer() {
     if (!selectedProject || activeEntry || timerBusy) return
     setTimerBusy(true)
@@ -653,6 +748,7 @@ export function MobileDashboard({ user }: { user: User }) {
             <Pressable onPress={() => openPage('planning')} style={[styles.menuItem, activePage === 'planning' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>✓</Text><Text style={styles.menuItemText}>Planejamento</Text></Pressable>
             <Pressable onPress={() => openPage('clients')} style={[styles.menuItem, activePage === 'clients' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>♡</Text><Text style={styles.menuItemText}>Clientes</Text></Pressable>
             <Pressable onPress={() => openPage('materials')} style={[styles.menuItem, activePage === 'materials' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>□</Text><Text style={styles.menuItemText}>Materiais</Text></Pressable>
+            <Pressable onPress={() => openPage('ideas')} style={[styles.menuItem, activePage === 'ideas' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>✦</Text><Text style={styles.menuItemText}>Ideias</Text></Pressable>
             <View style={styles.menuDivider} />
             <View style={styles.menuSync}><View style={styles.liveDot} /><Text style={styles.menuSyncText}>Firebase conectado e sincronizado</Text></View>
             <Pressable onPress={() => signOut(auth)} style={styles.menuLogout}><Text style={styles.menuLogoutText}>Sair da conta</Text></Pressable>
@@ -833,6 +929,34 @@ export function MobileDashboard({ user }: { user: User }) {
               <TextInput keyboardType="decimal-pad" onChangeText={(unitCost) => setMaterialForm((current) => current ? { ...current, unitCost } : current)} placeholder="0,00" placeholderTextColor="#B69B91" style={styles.formInput} value={materialForm?.unitCost || ''} />
               {materialFormError ? <Text style={styles.formError}>{materialFormError}</Text> : null}
               <Pressable disabled={savingMaterial} onPress={saveMaterialForm} style={({ pressed }) => [styles.saveTaskButton, (pressed || savingMaterial) && styles.buttonPressed]}>{savingMaterial ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>{materialForm?.id ? 'Salvar alterações' : 'Cadastrar material'}</Text>}</Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal animationType="slide" onRequestClose={() => setIdeaForm(null)} transparent visible={Boolean(ideaForm)}>
+        <View style={styles.menuBackdrop}>
+          <View style={styles.ideaFormSheet}>
+            <View style={styles.menuHeading}>
+              <View style={styles.projectDetailsHeading}><Text style={styles.sectionKicker}>{ideaForm?.id ? 'EDITAR INSPIRAÇÃO' : 'NOVA INSPIRAÇÃO'}</Text><Text style={styles.menuTitle}>{ideaForm?.id ? 'Editar ideia' : 'Cadastrar ideia'}</Text></View>
+              <Pressable accessibilityLabel="Fechar formulário" onPress={() => setIdeaForm(null)} style={styles.menuClose}><Text style={styles.menuCloseText}>×</Text></Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.formLabel}>NOME DA IDEIA</Text>
+              <TextInput onChangeText={(title) => setIdeaForm((current) => current ? { ...current, title } : current)} placeholder="Ex.: Topo de bolo jardim encantado" placeholderTextColor="#B69B91" style={styles.formInput} value={ideaForm?.title || ''} />
+              <Text style={styles.formLabel}>DESCRIÇÃO</Text>
+              <TextInput multiline numberOfLines={4} onChangeText={(description) => setIdeaForm((current) => current ? { ...current, description } : current)} placeholder="Conte um pouco sobre a inspiração..." placeholderTextColor="#B69B91" style={[styles.formInput, styles.reasonInput]} textAlignVertical="top" value={ideaForm?.description || ''} />
+              <Text style={styles.formLabel}>CATEGORIA</Text>
+              <TextInput onChangeText={(category) => setIdeaForm((current) => current ? { ...current, category } : current)} placeholder="Ex.: Topo de bolo" placeholderTextColor="#B69B91" style={styles.formInput} value={ideaForm?.category || ''} />
+              <Text style={styles.formLabel}>PRIORIDADE</Text>
+              <View style={styles.priorityOptions}>{['Baixa', 'Média', 'Alta'].map((priority) => <Pressable key={priority} onPress={() => setIdeaForm((current) => current ? { ...current, priority } : current)} style={[styles.priorityOption, ideaForm?.priority === priority && styles.priorityOptionActive]}><Text style={[styles.priorityOptionText, ideaForm?.priority === priority && styles.priorityOptionTextActive]}>{priority}</Text></Pressable>)}</View>
+              <Text style={styles.formLabel}>TAGS</Text>
+              <TextInput autoCapitalize="none" onChangeText={(tags) => setIdeaForm((current) => current ? { ...current, tags } : current)} placeholder="flores, casamento, gatos" placeholderTextColor="#B69B91" style={styles.formInput} value={ideaForm?.tags || ''} />
+              <Text style={styles.formHint}>Separe as tags por vírgulas.</Text>
+              <Text style={styles.formLabel}>LINK DE REFERÊNCIA</Text>
+              <TextInput autoCapitalize="none" keyboardType="url" onChangeText={(link) => setIdeaForm((current) => current ? { ...current, link } : current)} placeholder="https://pinterest.com/..." placeholderTextColor="#B69B91" style={styles.formInput} value={ideaForm?.link || ''} />
+              {ideaFormError ? <Text style={styles.formError}>{ideaFormError}</Text> : null}
+              <Pressable disabled={savingIdea} onPress={saveIdeaForm} style={({ pressed }) => [styles.saveTaskButton, (pressed || savingIdea) && styles.buttonPressed]}>{savingIdea ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>{ideaForm?.id ? 'Salvar alterações' : 'Salvar ideia'}</Text>}</Pressable>
             </ScrollView>
           </View>
         </View>
@@ -1057,7 +1181,7 @@ export function MobileDashboard({ user }: { user: User }) {
             </Pressable>
           }) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>♡</Text><Text style={styles.sectionTitle}>{clientQuery ? 'Nenhuma cliente encontrada' : 'Nenhuma cliente cadastrada'}</Text><Text style={styles.emptyText}>{clientQuery ? 'Tente buscar por outro nome ou contato.' : 'Toque no botão + para cadastrar a primeira cliente.'}</Text></View>}
         </View>
-      ) : (
+      ) : activePage === 'materials' ? (
         <View>
           <View style={styles.materialSummaryRow}>
             <View style={styles.materialSummaryCard}><Text style={styles.materialSummaryValue}>{materials.length}</Text><Text style={styles.materialSummaryLabel}>Cadastrados</Text></View>
@@ -1081,6 +1205,28 @@ export function MobileDashboard({ user }: { user: User }) {
             </Pressable>
           }) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>□</Text><Text style={styles.sectionTitle}>{materialQuery ? 'Nenhum material encontrado' : 'Nenhum material cadastrado'}</Text><Text style={styles.emptyText}>{materialQuery ? 'Tente buscar por outro nome ou categoria.' : 'Toque no botão + para cadastrar o primeiro material.'}</Text></View>}
         </View>
+      ) : (
+        <View>
+          <View style={styles.ideasFilterRow}>
+            <TextInput autoCapitalize="none" onChangeText={setIdeaQuery} placeholder="Pesquisar ideias..." placeholderTextColor="#B69B91" style={styles.clientSearchInput} value={ideaQuery} />
+            <Pressable accessibilityLabel="Cadastrar ideia" onPress={openNewIdea} style={styles.newClientButton}><Text style={styles.newClientButtonText}>＋</Text></Pressable>
+          </View>
+          <Pressable onPress={() => setShowFavoriteIdeas((current) => !current)} style={[styles.favoriteFilter, showFavoriteIdeas && styles.favoriteFilterActive]}><Text style={[styles.favoriteFilterText, showFavoriteIdeas && styles.favoriteFilterTextActive]}>♥ {showFavoriteIdeas ? 'Mostrando favoritas' : 'Mostrar somente favoritas'}</Text></Pressable>
+          <Text style={styles.clientCount}>{filteredIdeas.length} {filteredIdeas.length === 1 ? 'ideia' : 'ideias'}</Text>
+          {filteredIdeas.length ? filteredIdeas.map((idea) => <View key={idea.id} style={[styles.ideaCard, idea.tone === 'brown' && styles.ideaCardBrown, idea.tone === 'blush' && styles.ideaCardBlush]}>
+            <View style={styles.ideaHeading}>
+              <View style={styles.rowBody}><Text style={styles.materialCategory}>{idea.category || 'Sem categoria'}</Text><Text style={styles.ideaTitle}>{idea.title}</Text></View>
+              <Pressable accessibilityLabel={`${idea.favorite ? 'Desfavoritar' : 'Favoritar'} ${idea.title}`} disabled={updatingFavoriteId === idea.id} onPress={() => toggleIdeaFavorite(idea)} style={[styles.favoriteButton, idea.favorite && styles.favoriteButtonActive]}>{updatingFavoriteId === idea.id ? <ActivityIndicator color="#D77F8B" size="small" /> : <Text style={[styles.favoriteButtonText, idea.favorite && styles.favoriteButtonTextActive]}>♥</Text>}</Pressable>
+            </View>
+            <Text numberOfLines={3} style={styles.ideaDescription}>{idea.description || 'Sem descrição.'}</Text>
+            {(idea.tags || []).length ? <View style={styles.ideaTags}>{(idea.tags || []).map((tag) => <Text key={tag} style={styles.ideaTag}>#{tag}</Text>)}</View> : null}
+            <View style={styles.ideaFooter}>
+              <Text style={[styles.ideaPriority, idea.priority === 'Alta' && styles.ideaPriorityHigh]}>{idea.converted ? 'PROJETO CRIADO' : `PRIORIDADE ${idea.priority.toLocaleUpperCase('pt-BR')}`}</Text>
+              {idea.link ? <Pressable onPress={() => Linking.openURL(idea.link || '').catch(() => undefined)} style={styles.ideaLinkButton}><Text style={styles.ideaLinkText}>Abrir referência ↗</Text></Pressable> : null}
+              <Pressable accessibilityLabel={`Editar ${idea.title}`} onPress={() => openEditIdea(idea)} style={styles.editTaskButton}><Text style={styles.editGlyph}>✎</Text></Pressable>
+            </View>
+          </View>) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>✦</Text><Text style={styles.sectionTitle}>Nenhuma ideia encontrada</Text><Text style={styles.emptyText}>Mude a busca ou toque em + para guardar uma inspiração.</Text></View>}
+        </View>
       )}
 
       <Pressable onPress={() => signOut(auth)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
@@ -1092,7 +1238,7 @@ export function MobileDashboard({ user }: { user: User }) {
         <Pressable onPress={() => openPage('home')} style={[styles.navItem, activePage === 'home' && styles.navItemActive]}><Text style={styles.navIcon}>⌂</Text><Text style={styles.navText}>Início</Text></Pressable>
         <Pressable onPress={() => openPage('projects')} style={[styles.navItem, activePage === 'projects' && styles.navItemActive]}><Text style={styles.navIcon}>▦</Text><Text style={styles.navText}>Projetos</Text></Pressable>
         <Pressable onPress={() => openPage('planning')} style={[styles.navItem, activePage === 'planning' && styles.navItemActive]}><Text style={styles.navIcon}>✓</Text><Text style={styles.navText}>Planejamento</Text></Pressable>
-        <Pressable onPress={() => setMenuOpen(true)} style={[styles.navItem, (activePage === 'clients' || activePage === 'materials') && styles.navItemActive]}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
+        <Pressable onPress={() => setMenuOpen(true)} style={[styles.navItem, (activePage === 'clients' || activePage === 'materials' || activePage === 'ideas') && styles.navItemActive]}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
       </View>
     </View>
   )
@@ -1166,6 +1312,7 @@ const styles = StyleSheet.create({
   unavailableFormSheet: { paddingHorizontal: 20, paddingTop: 21, paddingBottom: 30, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   clientFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   materialFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
+  ideaFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   formLabel: { marginTop: 13, marginBottom: 7, color: '#9A7D72', fontSize: 8, fontWeight: '900', letterSpacing: 0.7 },
   formInput: { minHeight: 48, paddingHorizontal: 13, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 12, backgroundColor: '#FFF7F6', color: '#704B3D', fontSize: 12 },
   dateInputRow: { flexDirection: 'row', gap: 9 },
@@ -1180,6 +1327,7 @@ const styles = StyleSheet.create({
   formProjectOptionActive: { borderColor: '#E6A2AA', backgroundColor: '#FBE8E7' },
   formProjectText: { flex: 1, color: '#704B3D', fontSize: 10, fontWeight: '700' },
   formError: { marginTop: 10, color: '#B84D5C', fontSize: 10, fontWeight: '800' },
+  formHint: { marginTop: 5, color: '#A48A80', fontSize: 8 },
   saveTaskButton: { minHeight: 49, alignItems: 'center', justifyContent: 'center', marginTop: 16, borderRadius: 12, backgroundColor: '#9A6B56' },
   saveTaskButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   reasonInput: { minHeight: 100, paddingTop: 13 },
@@ -1226,6 +1374,28 @@ const styles = StyleSheet.create({
   materialStock: { color: '#55795E', fontSize: 10, fontWeight: '900' },
   materialMeta: { color: '#A48A80', fontSize: 8 },
   lowStockBadge: { paddingHorizontal: 7, paddingVertical: 5, overflow: 'hidden', borderRadius: 8, backgroundColor: '#FDE0DF', color: '#B84D5C', fontSize: 7, fontWeight: '900' },
+  ideasFilterRow: { flexDirection: 'row', gap: 9, marginTop: 12 },
+  favoriteFilter: { alignSelf: 'flex-start', marginTop: 9, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 18, backgroundColor: '#FFFBFA' },
+  favoriteFilterActive: { borderColor: '#D77F8B', backgroundColor: '#F8E3E2' },
+  favoriteFilterText: { color: '#9A7D72', fontSize: 8, fontWeight: '800' },
+  favoriteFilterTextActive: { color: '#B84D5C' },
+  ideaCard: { padding: 17, marginTop: 11, borderWidth: 1, borderColor: '#ECCFD0', borderRadius: 18, backgroundColor: '#FFF8F7' },
+  ideaCardBrown: { borderColor: '#DCCBC3', backgroundColor: '#FBF5F1' },
+  ideaCardBlush: { borderColor: '#EAD9D6', backgroundColor: '#FFFBFA' },
+  ideaHeading: { flexDirection: 'row', alignItems: 'flex-start' },
+  ideaTitle: { marginTop: 4, color: '#704B3D', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 17 },
+  favoriteButton: { width: 35, height: 35, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#FFFFFF' },
+  favoriteButtonActive: { backgroundColor: '#F7DDDC' },
+  favoriteButtonText: { color: '#D7B7B4', fontSize: 17 },
+  favoriteButtonTextActive: { color: '#D86471' },
+  ideaDescription: { marginTop: 9, color: '#8B6F65', fontSize: 10, lineHeight: 16 },
+  ideaTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 10 },
+  ideaTag: { paddingHorizontal: 7, paddingVertical: 4, overflow: 'hidden', borderRadius: 9, backgroundColor: '#F7DDDC', color: '#9A6B56', fontSize: 7, fontWeight: '800' },
+  ideaFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 13, paddingTop: 11, borderTopWidth: 1, borderTopColor: '#ECD6D4' },
+  ideaPriority: { flex: 1, color: '#8A8D70', fontSize: 7, fontWeight: '900' },
+  ideaPriorityHigh: { color: '#B84D5C' },
+  ideaLinkButton: { paddingHorizontal: 8, paddingVertical: 7 },
+  ideaLinkText: { color: '#D77F8B', fontSize: 8, fontWeight: '900' },
   monthNavigator: { minHeight: 64, flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5, borderRadius: 15, backgroundColor: '#FFF5F4' },
   monthButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#F7DDDC' },
   monthButtonText: { color: '#9A6B56', fontSize: 30, lineHeight: 32, fontWeight: '500' },
