@@ -26,6 +26,22 @@ type Project = {
   client?: string
   type?: string
   referenceLink?: string
+  tags?: string[]
+  sourceIdeaId?: string
+}
+
+type ProjectForm = {
+  id?: string
+  sourceIdeaId?: string
+  title: string
+  description: string
+  category: string
+  tags: string
+  type: 'Pessoal' | 'Encomenda'
+  client: string
+  deadline: string
+  referenceLink: string
+  status: string
 }
 
 type Task = {
@@ -242,6 +258,9 @@ export function MobileDashboard({ user }: { user: User }) {
   const [ideaFormError, setIdeaFormError] = useState('')
   const [savingIdea, setSavingIdea] = useState(false)
   const [updatingFavoriteId, setUpdatingFavoriteId] = useState<string | null>(null)
+  const [projectForm, setProjectForm] = useState<ProjectForm | null>(null)
+  const [projectFormError, setProjectFormError] = useState('')
+  const [savingProject, setSavingProject] = useState(false)
 
   useEffect(() => onSnapshot(doc(db, 'users', user.uid, 'settings', 'atelier'), (snapshot) => {
     if (snapshot.exists()) setSettings(snapshot.data() as AtelierSettings)
@@ -630,6 +649,92 @@ export function MobileDashboard({ user }: { user: User }) {
     }
   }
 
+  function openNewProject(sourceIdea?: Idea) {
+    setSelectedProjectDetailsId(null)
+    setProjectFormError('')
+    setProjectForm({
+      sourceIdeaId: sourceIdea?.id,
+      title: sourceIdea?.title || '',
+      description: sourceIdea?.description || '',
+      category: sourceIdea?.category || '',
+      tags: (sourceIdea?.tags || []).join(', '),
+      type: 'Pessoal',
+      client: '',
+      deadline: '',
+      referenceLink: sourceIdea?.link || '',
+      status: 'Planejamento',
+    })
+  }
+
+  function openEditProject(project: Project) {
+    setSelectedProjectDetailsId(null)
+    setProjectFormError('')
+    setProjectForm({
+      id: project.id,
+      sourceIdeaId: project.sourceIdeaId,
+      title: project.title,
+      description: project.description || '',
+      category: project.category || '',
+      tags: (project.tags || []).join(', '),
+      type: project.type === 'Encomenda' ? 'Encomenda' : 'Pessoal',
+      client: project.client || '',
+      deadline: project.deadline ? formatInputDate(project.deadline) : '',
+      referenceLink: project.referenceLink || '',
+      status: project.status,
+    })
+  }
+
+  async function saveProjectForm() {
+    if (!projectForm || savingProject) return
+    const deadline = projectForm.deadline ? parseInputDate(projectForm.deadline) : ''
+    if (!projectForm.title.trim() || !projectForm.category.trim()) { setProjectFormError('Informe o nome e a categoria do projeto.'); return }
+    if (projectForm.deadline && !deadline) { setProjectFormError('Use uma data de prazo válida no formato dia/mês/ano.'); return }
+    if (projectForm.type === 'Encomenda' && !projectForm.client) { setProjectFormError('Escolha a cliente da encomenda.'); return }
+    if (projectForm.referenceLink.trim() && !/^https?:\/\//i.test(projectForm.referenceLink.trim())) { setProjectFormError('O link precisa começar com http:// ou https://'); return }
+    setSavingProject(true)
+    setProjectFormError('')
+    const data = {
+      title: projectForm.title.trim(),
+      description: projectForm.description.trim(),
+      category: projectForm.category.trim(),
+      tags: projectForm.tags.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean),
+      type: projectForm.type,
+      client: projectForm.type === 'Encomenda' ? projectForm.client : '',
+      deadline,
+      referenceLink: projectForm.referenceLink.trim(),
+      status: projectForm.status,
+    }
+    try {
+      if (projectForm.id) {
+        if (inactiveStatuses.has(projectForm.status) && activeEntry?.projectId === projectForm.id) {
+          const nowIso = new Date().toISOString()
+          const batch = writeBatch(db)
+          batch.update(doc(db, 'users', user.uid, 'projects', projectForm.id), data)
+          batch.update(doc(db, 'users', user.uid, 'timeEntries', activeEntry.id), { endedAt: nowIso, autoPaused: true, pauseReason: `Projeto movido para ${projectForm.status} no aplicativo mobile` })
+          batch.set(doc(db, 'users', user.uid, 'timer', 'current'), { status: 'paused', pauseReason: `Projeto movido para ${projectForm.status} no aplicativo mobile`, updatedAt: nowIso }, { merge: true })
+          await batch.commit()
+        } else {
+          await updateDoc(doc(db, 'users', user.uid, 'projects', projectForm.id), data)
+        }
+      } else {
+        const projectId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+        const batch = writeBatch(db)
+        batch.set(doc(db, 'users', user.uid, 'projects', projectId), { id: projectId, ...data, sourceIdeaId: projectForm.sourceIdeaId || '', createdAt: new Date().toISOString() })
+        batch.set(doc(db, 'users', user.uid, 'projects', '_index'), { ids: arrayUnion(projectId), updatedAt: serverTimestamp() }, { merge: true })
+        if (projectForm.sourceIdeaId) batch.update(doc(db, 'users', user.uid, 'ideas', projectForm.sourceIdeaId), { converted: true })
+        await batch.commit()
+      }
+      setProjectForm(null)
+      setActivePage('projects')
+      setActionMessage(projectForm.id ? 'Projeto atualizado.' : 'Projeto criado com sucesso.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setProjectFormError('Não foi possível salvar o projeto. Tente novamente.')
+    } finally {
+      setSavingProject(false)
+    }
+  }
+
   async function startTimer() {
     if (!selectedProject || activeEntry || timerBusy) return
     setTimerBusy(true)
@@ -796,6 +901,40 @@ export function MobileDashboard({ user }: { user: User }) {
                 {selectedProjectDetails?.status === status ? <Text style={styles.statusCheck}>✓</Text> : null}
               </Pressable>)}</View>
               {updatingProject ? <View style={styles.statusLoading}><ActivityIndicator color="#D77F8B" /><Text style={styles.loadingText}>Atualizando projeto...</Text></View> : null}
+              {selectedProjectDetails?.referenceLink ? <Pressable onPress={() => Linking.openURL(selectedProjectDetails.referenceLink || '').catch(() => undefined)} style={styles.projectReferenceButton}><Text style={styles.projectReferenceText}>Abrir referência ↗</Text></Pressable> : null}
+              {selectedProjectDetails ? <Pressable onPress={() => openEditProject(selectedProjectDetails)} style={styles.saveTaskButton}><Text style={styles.saveTaskButtonText}>Editar informações do projeto</Text></Pressable> : null}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal animationType="slide" onRequestClose={() => setProjectForm(null)} transparent visible={Boolean(projectForm)}>
+        <View style={styles.menuBackdrop}>
+          <View style={styles.projectFormSheet}>
+            <View style={styles.menuHeading}>
+              <View style={styles.projectDetailsHeading}><Text style={styles.sectionKicker}>{projectForm?.sourceIdeaId ? 'TRANSFORMAR IDEIA' : projectForm?.id ? 'EDITAR PROJETO' : 'NOVO PROJETO'}</Text><Text style={styles.menuTitle}>{projectForm?.id ? 'Editar projeto' : 'Criar projeto'}</Text></View>
+              <Pressable accessibilityLabel="Fechar formulário" onPress={() => setProjectForm(null)} style={styles.menuClose}><Text style={styles.menuCloseText}>×</Text></Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.formLabel}>NOME DO PROJETO</Text>
+              <TextInput onChangeText={(title) => setProjectForm((current) => current ? { ...current, title } : current)} placeholder="Ex.: Noivinhos com pets" placeholderTextColor="#B69B91" style={styles.formInput} value={projectForm?.title || ''} />
+              <Text style={styles.formLabel}>DESCRIÇÃO</Text>
+              <TextInput multiline numberOfLines={4} onChangeText={(description) => setProjectForm((current) => current ? { ...current, description } : current)} placeholder="Detalhes da peça..." placeholderTextColor="#B69B91" style={[styles.formInput, styles.reasonInput]} textAlignVertical="top" value={projectForm?.description || ''} />
+              <Text style={styles.formLabel}>TIPO</Text>
+              <View style={styles.priorityOptions}>{(['Pessoal', 'Encomenda'] as const).map((type) => <Pressable key={type} onPress={() => setProjectForm((current) => current ? { ...current, type, client: type === 'Pessoal' ? '' : current.client } : current)} style={[styles.priorityOption, projectForm?.type === type && styles.priorityOptionActive]}><Text style={[styles.priorityOptionText, projectForm?.type === type && styles.priorityOptionTextActive]}>{type}</Text></Pressable>)}</View>
+              {projectForm?.type === 'Encomenda' ? <><Text style={styles.formLabel}>CLIENTE</Text><View>{clients.length ? clients.map((client) => <Pressable key={client.id} onPress={() => setProjectForm((current) => current ? { ...current, client: client.name } : current)} style={[styles.formProjectOption, projectForm.client === client.name && styles.formProjectOptionActive]}><Text style={styles.formProjectText}>{client.name}</Text>{projectForm.client === client.name ? <Text style={styles.statusCheck}>✓</Text> : null}</Pressable>) : <Text style={styles.formHint}>Cadastre uma cliente antes de criar uma encomenda.</Text>}</View></> : null}
+              <Text style={styles.formLabel}>CATEGORIA</Text>
+              <TextInput onChangeText={(category) => setProjectForm((current) => current ? { ...current, category } : current)} placeholder="Ex.: Noivinhos" placeholderTextColor="#B69B91" style={styles.formInput} value={projectForm?.category || ''} />
+              <Text style={styles.formLabel}>PRAZO</Text>
+              <TextInput keyboardType="number-pad" maxLength={10} onChangeText={(deadline) => setProjectForm((current) => current ? { ...current, deadline: maskInputDate(deadline) } : current)} placeholder="DD/MM/AAAA (opcional)" placeholderTextColor="#B69B91" style={styles.formInput} value={projectForm?.deadline || ''} />
+              <Text style={styles.formLabel}>ETAPA</Text>
+              <View style={styles.statusGrid}>{projectStatuses.map((status) => <Pressable key={status} onPress={() => setProjectForm((current) => current ? { ...current, status } : current)} style={[styles.statusOption, projectForm?.status === status && styles.statusOptionActive]}><View style={[styles.statusDot, status === 'Stand by' && styles.statusDotStandBy, (status === 'Pronto' || status === 'Entregue') && styles.statusDotDone]} /><Text style={[styles.statusOptionText, projectForm?.status === status && styles.statusOptionTextActive]}>{status}</Text>{projectForm?.status === status ? <Text style={styles.statusCheck}>✓</Text> : null}</Pressable>)}</View>
+              <Text style={styles.formLabel}>TAGS</Text>
+              <TextInput autoCapitalize="none" onChangeText={(tags) => setProjectForm((current) => current ? { ...current, tags } : current)} placeholder="gatos, casamento, presente" placeholderTextColor="#B69B91" style={styles.formInput} value={projectForm?.tags || ''} />
+              <Text style={styles.formLabel}>LINK DE REFERÊNCIA</Text>
+              <TextInput autoCapitalize="none" keyboardType="url" onChangeText={(referenceLink) => setProjectForm((current) => current ? { ...current, referenceLink } : current)} placeholder="https://pinterest.com/..." placeholderTextColor="#B69B91" style={styles.formInput} value={projectForm?.referenceLink || ''} />
+              {projectFormError ? <Text style={styles.formError}>{projectFormError}</Text> : null}
+              <Pressable disabled={savingProject} onPress={saveProjectForm} style={({ pressed }) => [styles.saveTaskButton, (pressed || savingProject) && styles.buttonPressed]}>{savingProject ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>{projectForm?.id ? 'Salvar alterações' : 'Criar projeto'}</Text>}</Pressable>
             </ScrollView>
           </View>
         </View>
@@ -1082,7 +1221,7 @@ export function MobileDashboard({ user }: { user: User }) {
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeading}>
             <View><Text style={styles.sectionKicker}>TODOS OS PROJETOS</Text><Text style={styles.sectionTitle}>{projects.length} cadastrados</Text></View>
-            <Text style={styles.countBadge}>{summary.activeProjects.length} ativos</Text>
+            <View style={styles.planningHeadingActions}><Text style={styles.countBadge}>{summary.activeProjects.length} ativos</Text><Pressable accessibilityLabel="Criar projeto" onPress={() => openNewProject()} style={styles.addTaskButton}><Text style={styles.addTaskButtonText}>＋</Text></Pressable></View>
           </View>
           {projects.length ? [...projects]
             .sort((first, second) => (first.deadline || '9999').localeCompare(second.deadline || '9999'))
@@ -1223,6 +1362,7 @@ export function MobileDashboard({ user }: { user: User }) {
             <View style={styles.ideaFooter}>
               <Text style={[styles.ideaPriority, idea.priority === 'Alta' && styles.ideaPriorityHigh]}>{idea.converted ? 'PROJETO CRIADO' : `PRIORIDADE ${idea.priority.toLocaleUpperCase('pt-BR')}`}</Text>
               {idea.link ? <Pressable onPress={() => Linking.openURL(idea.link || '').catch(() => undefined)} style={styles.ideaLinkButton}><Text style={styles.ideaLinkText}>Abrir referência ↗</Text></Pressable> : null}
+              {!idea.converted ? <Pressable accessibilityLabel={`Transformar ${idea.title} em projeto`} onPress={() => openNewProject(idea)} style={styles.convertIdeaButton}><Text style={styles.convertIdeaText}>Criar projeto</Text></Pressable> : null}
               <Pressable accessibilityLabel={`Editar ${idea.title}`} onPress={() => openEditIdea(idea)} style={styles.editTaskButton}><Text style={styles.editGlyph}>✎</Text></Pressable>
             </View>
           </View>) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>✦</Text><Text style={styles.sectionTitle}>Nenhuma ideia encontrada</Text><Text style={styles.emptyText}>Mude a busca ou toque em + para guardar uma inspiração.</Text></View>}
@@ -1277,6 +1417,7 @@ const styles = StyleSheet.create({
   projectPickerItem: { minHeight: 64, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 11, borderBottomWidth: 1, borderBottomColor: '#F2E4E2', borderRadius: 12 },
   projectSelected: { color: '#73A276', fontSize: 18, fontWeight: '900' },
   projectDetailsSheet: { maxHeight: '88%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 30, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
+  projectFormSheet: { maxHeight: '94%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   projectDetailsHeading: { flex: 1, paddingRight: 12 },
   projectDetailsMeta: { flexDirection: 'row', gap: 8, marginBottom: 15 },
   detailLabel: { color: '#D77F8B', fontSize: 7, fontWeight: '900', letterSpacing: 0.7 },
@@ -1294,6 +1435,8 @@ const styles = StyleSheet.create({
   statusOptionTextActive: { color: '#704B3D', fontWeight: '900' },
   statusCheck: { color: '#D77F8B', fontSize: 15, fontWeight: '900' },
   statusLoading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 },
+  projectReferenceButton: { minHeight: 43, alignItems: 'center', justifyContent: 'center', marginTop: 14, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 11, backgroundColor: '#FFF7F6' },
+  projectReferenceText: { color: '#D77F8B', fontSize: 10, fontWeight: '900' },
   dayDetailsSheet: { maxHeight: '82%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 30, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   dayDetailRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 13, marginBottom: 8, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 14, backgroundColor: '#FFF8F7' },
   dayDetailLate: { borderColor: '#EAA0A0', backgroundColor: '#FFF0EF' },
@@ -1396,6 +1539,8 @@ const styles = StyleSheet.create({
   ideaPriorityHigh: { color: '#B84D5C' },
   ideaLinkButton: { paddingHorizontal: 8, paddingVertical: 7 },
   ideaLinkText: { color: '#D77F8B', fontSize: 8, fontWeight: '900' },
+  convertIdeaButton: { paddingHorizontal: 9, paddingVertical: 7, borderRadius: 9, backgroundColor: '#E9D6CC' },
+  convertIdeaText: { color: '#704B3D', fontSize: 7, fontWeight: '900' },
   monthNavigator: { minHeight: 64, flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5, borderRadius: 15, backgroundColor: '#FFF5F4' },
   monthButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#F7DDDC' },
   monthButtonText: { color: '#9A6B56', fontSize: 30, lineHeight: 32, fontWeight: '500' },
