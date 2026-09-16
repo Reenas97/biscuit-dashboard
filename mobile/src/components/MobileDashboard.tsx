@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { User } from 'firebase/auth'
 import { signOut } from 'firebase/auth'
-import { collection, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore'
+import { arrayUnion, collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import {
   ActivityIndicator,
   Modal,
@@ -98,6 +98,9 @@ export function MobileDashboard({ user }: { user: User }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState('')
+  const [selectedProjectId, setSelectedProjectId] = useState('')
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false)
+  const [timerBusy, setTimerBusy] = useState(false)
 
   useEffect(() => onSnapshot(doc(db, 'users', user.uid, 'settings', 'atelier'), (snapshot) => {
     if (snapshot.exists()) setSettings(snapshot.data() as AtelierSettings)
@@ -111,6 +114,20 @@ export function MobileDashboard({ user }: { user: User }) {
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [activeEntry])
+
+  useEffect(() => {
+    if (!activeEntry) return
+    const sendHeartbeat = () => setDoc(doc(db, 'users', user.uid, 'timer', 'current'), {
+      status: 'active',
+      entryId: activeEntry.id,
+      projectId: activeEntry.projectId,
+      heartbeatAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }, { merge: true }).catch(() => undefined)
+    sendHeartbeat()
+    const heartbeat = setInterval(sendHeartbeat, 60_000)
+    return () => clearInterval(heartbeat)
+  }, [activeEntry, user.uid])
 
   const summary = useMemo(() => {
     const today = dateKey(new Date())
@@ -134,6 +151,8 @@ export function MobileDashboard({ user }: { user: User }) {
     : 0
   const ownerFirstName = settings.ownerName?.trim().split(/\s+/)[0] || 'Renata'
   const loading = !projectsReady || !tasksReady || !timeReady
+  const timerProjects = summary.activeProjects
+  const selectedProject = timerProjects.find((project) => project.id === selectedProjectId)
 
   function openPage(page: MobilePage) {
     setActivePage(page)
@@ -156,6 +175,65 @@ export function MobileDashboard({ user }: { user: User }) {
       setActionMessage('Não foi possível atualizar a tarefa. Tente novamente.')
     } finally {
       setUpdatingTaskId(null)
+    }
+  }
+
+  async function startTimer() {
+    if (!selectedProject || activeEntry || timerBusy) return
+    setTimerBusy(true)
+    setActionMessage('')
+    const nowIso = new Date().toISOString()
+    const entryId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    try {
+      const batch = writeBatch(db)
+      batch.set(doc(db, 'users', user.uid, 'timeEntries', entryId), {
+        id: entryId,
+        projectId: selectedProject.id,
+        startedAt: nowIso,
+        lastActivityAt: nowIso,
+      })
+      batch.set(doc(db, 'users', user.uid, 'timeEntries', '_index'), {
+        ids: arrayUnion(entryId),
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+      batch.set(doc(db, 'users', user.uid, 'timer', 'current'), {
+        status: 'active',
+        entryId,
+        projectId: selectedProject.id,
+        heartbeatAt: nowIso,
+        updatedAt: nowIso,
+      }, { merge: true })
+      await batch.commit()
+      setSelectedProjectId('')
+      setActionMessage(`Cronômetro iniciado para ${selectedProject.title}.`)
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setActionMessage('Não foi possível iniciar o cronômetro. Tente novamente.')
+    } finally {
+      setTimerBusy(false)
+    }
+  }
+
+  async function pauseTimer() {
+    if (!activeEntry || timerBusy) return
+    setTimerBusy(true)
+    setActionMessage('')
+    const nowIso = new Date().toISOString()
+    try {
+      const batch = writeBatch(db)
+      batch.update(doc(db, 'users', user.uid, 'timeEntries', activeEntry.id), { endedAt: nowIso })
+      batch.set(doc(db, 'users', user.uid, 'timer', 'current'), {
+        status: 'paused',
+        pauseReason: 'Pausa manual no aplicativo mobile',
+        updatedAt: nowIso,
+      }, { merge: true })
+      await batch.commit()
+      setActionMessage('Cronômetro pausado e tempo salvo no projeto.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setActionMessage('Não foi possível pausar o cronômetro. Tente novamente.')
+    } finally {
+      setTimerBusy(false)
     }
   }
 
@@ -185,6 +263,25 @@ export function MobileDashboard({ user }: { user: User }) {
             <View style={styles.menuDivider} />
             <View style={styles.menuSync}><View style={styles.liveDot} /><Text style={styles.menuSyncText}>Firebase conectado e sincronizado</Text></View>
             <Pressable onPress={() => signOut(auth)} style={styles.menuLogout}><Text style={styles.menuLogoutText}>Sair da conta</Text></Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal animationType="slide" onRequestClose={() => setProjectPickerOpen(false)} transparent visible={projectPickerOpen}>
+        <View style={styles.menuBackdrop}>
+          <View style={styles.menuSheet}>
+            <View style={styles.menuHeading}>
+              <View><Text style={styles.sectionKicker}>CRONÔMETRO</Text><Text style={styles.menuTitle}>Escolha o projeto</Text></View>
+              <Pressable accessibilityLabel="Fechar projetos" onPress={() => setProjectPickerOpen(false)} style={styles.menuClose}><Text style={styles.menuCloseText}>×</Text></Pressable>
+            </View>
+            <ScrollView style={styles.projectPickerList}>
+              {timerProjects.map((project) => <Pressable key={project.id} onPress={() => { setSelectedProjectId(project.id); setProjectPickerOpen(false) }} style={[styles.projectPickerItem, selectedProjectId === project.id && styles.menuItemActive]}>
+                <View style={styles.projectIcon}><Text style={styles.projectIconText}>R</Text></View>
+                <View style={styles.rowBody}><Text style={styles.rowTitle}>{project.title}</Text><Text style={styles.rowMeta}>{project.status} · {formatShortDate(project.deadline)}</Text></View>
+                {selectedProjectId === project.id ? <Text style={styles.projectSelected}>✓</Text> : null}
+              </Pressable>)}
+              {!timerProjects.length ? <Text style={styles.emptyText}>Nenhum projeto disponível para iniciar.</Text> : null}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -225,7 +322,17 @@ export function MobileDashboard({ user }: { user: User }) {
             <Text style={styles.sectionTitle}>{activeProject?.title || 'Nenhum projeto em andamento'}</Text>
             <Text style={styles.sectionText}>{activeEntry
               ? `${formatDuration(activeSeconds)} nesta sessão · iniciado às ${new Date(activeEntry.startedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
-              : 'Quando você iniciar um projeto no dashboard, ele aparecerá aqui.'}</Text>
+              : 'Escolha uma peça para começar a contabilizar o tempo trabalhado.'}</Text>
+            {activeEntry ? <Pressable disabled={timerBusy} onPress={pauseTimer} style={({ pressed }) => [styles.timerPauseButton, (pressed || timerBusy) && styles.buttonPressed]}>
+              {timerBusy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.timerPauseText}>Ⅱ  Pausar e salvar</Text>}
+            </Pressable> : <View style={styles.timerControls}>
+              <Pressable onPress={() => setProjectPickerOpen(true)} style={styles.projectSelectButton}>
+                <Text style={selectedProject ? styles.projectSelectValue : styles.projectSelectPlaceholder}>{selectedProject?.title || 'Selecionar projeto...'}</Text><Text style={styles.projectSelectArrow}>⌄</Text>
+              </Pressable>
+              <Pressable disabled={!selectedProject || timerBusy} onPress={startTimer} style={({ pressed }) => [styles.timerStartButton, (!selectedProject || pressed || timerBusy) && styles.timerStartDisabled]}>
+                {timerBusy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.timerStartText}>▶ Iniciar</Text>}
+              </Pressable>
+            </View>}
           </View>
 
           <View style={styles.sectionCard}>
@@ -392,6 +499,9 @@ const styles = StyleSheet.create({
   menuSyncText: { color: '#77836E', fontSize: 10, fontWeight: '700' },
   menuLogout: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 17, borderWidth: 1, borderColor: '#D9BCB7', borderRadius: 13 },
   menuLogoutText: { color: '#8B6252', fontSize: 12, fontWeight: '800' },
+  projectPickerList: { maxHeight: 420 },
+  projectPickerItem: { minHeight: 64, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 11, borderBottomWidth: 1, borderBottomColor: '#F2E4E2', borderRadius: 12 },
+  projectSelected: { color: '#73A276', fontSize: 18, fontWeight: '900' },
   welcomeCard: { padding: 21, borderRadius: 22, backgroundColor: '#E9A0A8' },
   eyebrow: { color: '#FFF5F4', fontSize: 9, fontWeight: '800', letterSpacing: 1 },
   welcomeTitle: { marginTop: 7, color: '#FFFFFF', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 26 },
@@ -413,6 +523,16 @@ const styles = StyleSheet.create({
   sectionKicker: { color: '#D77F8B', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
   sectionTitle: { marginTop: 5, color: '#704B3D', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 20 },
   sectionText: { marginTop: 8, color: '#9A7D72', fontSize: 11, lineHeight: 17 },
+  timerControls: { marginTop: 15, gap: 9 },
+  projectSelectButton: { minHeight: 47, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 13, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 12, backgroundColor: '#FFF7F6' },
+  projectSelectPlaceholder: { color: '#B69B91', fontSize: 11 },
+  projectSelectValue: { flex: 1, color: '#704B3D', fontSize: 11, fontWeight: '800' },
+  projectSelectArrow: { color: '#D77F8B', fontSize: 18, fontWeight: '800' },
+  timerStartButton: { minHeight: 47, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#9A6B56' },
+  timerStartDisabled: { opacity: 0.45 },
+  timerStartText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  timerPauseButton: { minHeight: 47, alignItems: 'center', justifyContent: 'center', marginTop: 15, borderRadius: 12, backgroundColor: '#D77F8B' },
+  timerPauseText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   deliveryRow: { flexDirection: 'row', alignItems: 'center', marginTop: 15 },
   dateBox: { width: 55, height: 50, alignItems: 'center', justifyContent: 'center', marginRight: 12, borderRadius: 13, backgroundColor: '#F7DDDC' },
   dateBoxText: { color: '#8B6252', fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
