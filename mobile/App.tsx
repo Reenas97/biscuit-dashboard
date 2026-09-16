@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
 import type { User } from 'firebase/auth'
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth'
+import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth'
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native'
 import { auth } from './src/lib/firebase'
+import { MobileDashboard } from './src/components/MobileDashboard'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -53,22 +54,7 @@ export default function App() {
     return (
       <SafeAreaView style={styles.app}>
         <StatusBar style="dark" />
-        <ScrollView contentContainerStyle={styles.dashboard}>
-          <View style={styles.brandRow}>
-            <View style={styles.logoMark}><Text style={styles.logoLetter}>R</Text></View>
-            <View><Text style={styles.brandName}>Reena Biscuit</Text><Text style={styles.brandSubtitle}>ATELIÊ DE BISCUIT</Text></View>
-          </View>
-          <View style={styles.welcomeCard}>
-            <Text style={styles.eyebrow}>APLICATIVO CONECTADO</Text>
-            <Text style={styles.welcomeTitle}>Olá, Renata 🐾</Text>
-            <Text style={styles.welcomeText}>Você entrou com a mesma conta do dashboard web. No próximo passo, os projetos e o planejamento aparecerão aqui.</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryCard}><Text style={styles.summaryValue}>✓</Text><Text style={styles.summaryLabel}>Firebase conectado</Text></View>
-            <View style={styles.summaryCard}><Text style={styles.summaryValue}>☁</Text><Text style={styles.summaryLabel}>Dados sincronizados</Text></View>
-          </View>
-          <Pressable onPress={() => signOut(auth)} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>Sair da conta</Text></Pressable>
-        </ScrollView>
+        <MobileDashboard user={user} />
       </SafeAreaView>
     )
   }
@@ -225,105 +211,5 @@ const styles = StyleSheet.create({
     color: '#A68B81',
     fontSize: 11,
     textAlign: 'center',
-  },
-  dashboard: {
-    flexGrow: 1,
-    padding: 22,
-  },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 11,
-    marginBottom: 24,
-  },
-  logoMark: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E59AA3',
-    borderRadius: 24,
-    backgroundColor: '#FFF8F7',
-  },
-  logoLetter: {
-    color: '#E59AA3',
-    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }),
-    fontSize: 27,
-    fontStyle: 'italic',
-  },
-  brandName: {
-    color: '#704B3D',
-    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }),
-    fontSize: 20,
-  },
-  brandSubtitle: {
-    marginTop: 2,
-    color: '#B3867A',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  welcomeCard: {
-    padding: 22,
-    borderRadius: 22,
-    backgroundColor: '#E9A0A8',
-  },
-  eyebrow: {
-    color: '#FFF5F4',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-  },
-  welcomeTitle: {
-    marginTop: 7,
-    color: '#FFFFFF',
-    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }),
-    fontSize: 27,
-  },
-  welcomeText: {
-    marginTop: 9,
-    color: '#FFF7F6',
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    gap: 11,
-    marginTop: 14,
-  },
-  summaryCard: {
-    flex: 1,
-    minHeight: 116,
-    justifyContent: 'space-between',
-    padding: 17,
-    borderWidth: 1,
-    borderColor: '#ECD6D4',
-    borderRadius: 17,
-    backgroundColor: '#FFFBFA',
-  },
-  summaryValue: {
-    color: '#E28E9A',
-    fontSize: 25,
-    fontWeight: '800',
-  },
-  summaryLabel: {
-    color: '#704B3D',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 22,
-    borderWidth: 1,
-    borderColor: '#D9BCB7',
-    borderRadius: 12,
-  },
-  secondaryButtonText: {
-    color: '#8B6252',
-    fontSize: 13,
-    fontWeight: '700',
   },
 })
