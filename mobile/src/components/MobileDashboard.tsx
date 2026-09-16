@@ -64,11 +64,29 @@ type UnavailableForm = {
   reason: string
 }
 
+type Client = {
+  id: string
+  name: string
+  phone?: string
+  instagram?: string
+  email?: string
+  notes?: string
+}
+
+type ClientForm = {
+  id?: string
+  name: string
+  phone: string
+  instagram: string
+  email: string
+  notes: string
+}
+
 type AtelierSettings = {
   ownerName?: string
 }
 
-type MobilePage = 'home' | 'projects' | 'planning'
+type MobilePage = 'home' | 'projects' | 'planning' | 'clients'
 
 const inactiveStatuses = new Set(['Stand by', 'Pronto', 'Entregue'])
 const projectStatuses = ['Planejamento', 'Stand by', 'Modelagem', 'Secagem', 'Pintura', 'Finalização', 'Envernização', 'Pronto', 'Entregue']
@@ -140,6 +158,7 @@ export function MobileDashboard({ user }: { user: User }) {
   const { items: tasks, ready: tasksReady } = useUserCollection<Task>(user.uid, 'tasks')
   const { items: timeEntries, ready: timeReady } = useUserCollection<TimeEntry>(user.uid, 'timeEntries')
   const { items: unavailableDays, ready: unavailableReady } = useUserCollection<UnavailableDay>(user.uid, 'unavailableDays')
+  const { items: clients, ready: clientsReady } = useUserCollection<Client>(user.uid, 'clients')
   const [settings, setSettings] = useState<AtelierSettings>({})
   const [now, setNow] = useState(() => Date.now())
   const [activePage, setActivePage] = useState<MobilePage>('home')
@@ -163,6 +182,10 @@ export function MobileDashboard({ user }: { user: User }) {
   const [unavailableFormError, setUnavailableFormError] = useState('')
   const [savingUnavailable, setSavingUnavailable] = useState(false)
   const [removingUnavailableId, setRemovingUnavailableId] = useState<string | null>(null)
+  const [clientQuery, setClientQuery] = useState('')
+  const [clientForm, setClientForm] = useState<ClientForm | null>(null)
+  const [clientFormError, setClientFormError] = useState('')
+  const [savingClient, setSavingClient] = useState(false)
 
   useEffect(() => onSnapshot(doc(db, 'users', user.uid, 'settings', 'atelier'), (snapshot) => {
     if (snapshot.exists()) setSettings(snapshot.data() as AtelierSettings)
@@ -212,7 +235,7 @@ export function MobileDashboard({ user }: { user: User }) {
     ? Math.max(0, Math.floor((now - new Date(activeEntry.startedAt).getTime()) / 1000))
     : 0
   const ownerFirstName = settings.ownerName?.trim().split(/\s+/)[0] || 'Renata'
-  const loading = !projectsReady || !tasksReady || !timeReady || !unavailableReady
+  const loading = !projectsReady || !tasksReady || !timeReady || !unavailableReady || !clientsReady
   const timerProjects = summary.activeProjects
   const selectedProject = timerProjects.find((project) => project.id === selectedProjectId)
   const selectedProjectDetails = projects.find((project) => project.id === selectedProjectDetailsId) ?? null
@@ -245,6 +268,18 @@ export function MobileDashboard({ user }: { user: User }) {
   const selectedDayUnavailable = selectedPlanningDate
     ? unavailableDays.filter((item) => item.date === selectedPlanningDate)
     : []
+  const filteredClients = useMemo(() => {
+    const query = clientQuery.trim().toLocaleLowerCase('pt-BR')
+    const sorted = [...clients].sort((first, second) => first.name.localeCompare(second.name, 'pt-BR'))
+    if (!query) return sorted
+    return sorted.filter((client) => [client.name, client.phone, client.instagram, client.email]
+      .some((value) => value?.toLocaleLowerCase('pt-BR').includes(query)))
+  }, [clientQuery, clients])
+  const pageMeta = activePage === 'projects'
+    ? { kicker: '🐾 PRODUÇÃO', title: 'Projetos', subtitle: 'Acompanhe todas as etapas das suas peças.' }
+    : activePage === 'planning'
+      ? { kicker: '✓ ROTINA DO ATELIÊ', title: 'Planejamento', subtitle: 'Veja tarefas, prazos e o que precisa da sua atenção.' }
+      : { kicker: '♡ CLIENTES DO ATELIÊ', title: 'Clientes', subtitle: 'Contatos e histórico de quem encomenda suas peças.' }
 
   function openPage(page: MobilePage) {
     setActivePage(page)
@@ -382,6 +417,48 @@ export function MobileDashboard({ user }: { user: User }) {
     }
   }
 
+  function openNewClient() {
+    setClientFormError('')
+    setClientForm({ name: '', phone: '', instagram: '', email: '', notes: '' })
+  }
+
+  function openEditClient(client: Client) {
+    setClientFormError('')
+    setClientForm({ id: client.id, name: client.name, phone: client.phone || '', instagram: client.instagram || '', email: client.email || '', notes: client.notes || '' })
+  }
+
+  async function saveClientForm() {
+    if (!clientForm || savingClient) return
+    if (!clientForm.name.trim()) { setClientFormError('Informe o nome da cliente.'); return }
+    setSavingClient(true)
+    setClientFormError('')
+    const data = {
+      name: clientForm.name.trim(),
+      phone: clientForm.phone.trim(),
+      instagram: clientForm.instagram.trim().replace(/^@/, ''),
+      email: clientForm.email.trim(),
+      notes: clientForm.notes.trim(),
+    }
+    try {
+      if (clientForm.id) {
+        await updateDoc(doc(db, 'users', user.uid, 'clients', clientForm.id), data)
+      } else {
+        const clientId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+        const batch = writeBatch(db)
+        batch.set(doc(db, 'users', user.uid, 'clients', clientId), { id: clientId, ...data, createdAt: new Date().toISOString() })
+        batch.set(doc(db, 'users', user.uid, 'clients', '_index'), { ids: arrayUnion(clientId), updatedAt: serverTimestamp() }, { merge: true })
+        await batch.commit()
+      }
+      setClientForm(null)
+      setActionMessage(clientForm.id ? 'Cliente atualizada.' : 'Cliente cadastrada.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setClientFormError('Não foi possível salvar a cliente. Tente novamente.')
+    } finally {
+      setSavingClient(false)
+    }
+  }
+
   async function startTimer() {
     if (!selectedProject || activeEntry || timerBusy) return
     setTimerBusy(true)
@@ -498,6 +575,7 @@ export function MobileDashboard({ user }: { user: User }) {
             <Pressable onPress={() => openPage('home')} style={[styles.menuItem, activePage === 'home' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>⌂</Text><Text style={styles.menuItemText}>Início</Text></Pressable>
             <Pressable onPress={() => openPage('projects')} style={[styles.menuItem, activePage === 'projects' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>▦</Text><Text style={styles.menuItemText}>Projetos</Text></Pressable>
             <Pressable onPress={() => openPage('planning')} style={[styles.menuItem, activePage === 'planning' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>✓</Text><Text style={styles.menuItemText}>Planejamento</Text></Pressable>
+            <Pressable onPress={() => openPage('clients')} style={[styles.menuItem, activePage === 'clients' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>♡</Text><Text style={styles.menuItemText}>Clientes</Text></Pressable>
             <View style={styles.menuDivider} />
             <View style={styles.menuSync}><View style={styles.liveDot} /><Text style={styles.menuSyncText}>Firebase conectado e sincronizado</Text></View>
             <Pressable onPress={() => signOut(auth)} style={styles.menuLogout}><Text style={styles.menuLogoutText}>Sair da conta</Text></Pressable>
@@ -631,14 +709,39 @@ export function MobileDashboard({ user }: { user: User }) {
         </View>
       </Modal>
 
+      <Modal animationType="slide" onRequestClose={() => setClientForm(null)} transparent visible={Boolean(clientForm)}>
+        <View style={styles.menuBackdrop}>
+          <View style={styles.clientFormSheet}>
+            <View style={styles.menuHeading}>
+              <View style={styles.projectDetailsHeading}><Text style={styles.sectionKicker}>{clientForm?.id ? 'ATUALIZAR CLIENTE' : 'NOVA CLIENTE'}</Text><Text style={styles.menuTitle}>{clientForm?.id ? 'Editar cliente' : 'Cadastrar cliente'}</Text></View>
+              <Pressable accessibilityLabel="Fechar formulário" onPress={() => setClientForm(null)} style={styles.menuClose}><Text style={styles.menuCloseText}>×</Text></Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.formLabel}>NOME</Text>
+              <TextInput onChangeText={(name) => setClientForm((current) => current ? { ...current, name } : current)} placeholder="Nome completo" placeholderTextColor="#B69B91" style={styles.formInput} value={clientForm?.name || ''} />
+              <Text style={styles.formLabel}>TELEFONE / WHATSAPP</Text>
+              <TextInput keyboardType="phone-pad" onChangeText={(phone) => setClientForm((current) => current ? { ...current, phone } : current)} placeholder="(00) 00000-0000" placeholderTextColor="#B69B91" style={styles.formInput} value={clientForm?.phone || ''} />
+              <Text style={styles.formLabel}>INSTAGRAM</Text>
+              <TextInput autoCapitalize="none" onChangeText={(instagram) => setClientForm((current) => current ? { ...current, instagram } : current)} placeholder="@usuario" placeholderTextColor="#B69B91" style={styles.formInput} value={clientForm?.instagram || ''} />
+              <Text style={styles.formLabel}>E-MAIL</Text>
+              <TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(email) => setClientForm((current) => current ? { ...current, email } : current)} placeholder="cliente@email.com" placeholderTextColor="#B69B91" style={styles.formInput} value={clientForm?.email || ''} />
+              <Text style={styles.formLabel}>OBSERVAÇÕES</Text>
+              <TextInput multiline numberOfLines={4} onChangeText={(notes) => setClientForm((current) => current ? { ...current, notes } : current)} placeholder="Preferências, datas importantes ou outros detalhes..." placeholderTextColor="#B69B91" style={[styles.formInput, styles.reasonInput]} textAlignVertical="top" value={clientForm?.notes || ''} />
+              {clientFormError ? <Text style={styles.formError}>{clientFormError}</Text> : null}
+              <Pressable disabled={savingClient} onPress={saveClientForm} style={({ pressed }) => [styles.saveTaskButton, (pressed || savingClient) && styles.buttonPressed]}>{savingClient ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>{clientForm?.id ? 'Salvar alterações' : 'Cadastrar cliente'}</Text>}</Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {activePage === 'home' ? <View style={styles.welcomeCard}>
         <Text style={styles.eyebrow}>{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).toLocaleUpperCase('pt-BR')}</Text>
         <Text style={styles.welcomeTitle}>Olá, {ownerFirstName} 🐾</Text>
         <Text style={styles.welcomeText}>Seu ateliê, seus prazos e sua bancada também no celular.</Text>
       </View> : <View style={styles.pageHeading}>
-        <Text style={styles.sectionKicker}>{activePage === 'projects' ? '🐾 PRODUÇÃO' : '✓ ROTINA DO ATELIÊ'}</Text>
-        <Text style={styles.pageTitle}>{activePage === 'projects' ? 'Projetos' : 'Planejamento'}</Text>
-        <Text style={styles.pageSubtitle}>{activePage === 'projects' ? 'Acompanhe todas as etapas das suas peças.' : 'Veja tarefas, prazos e o que precisa da sua atenção.'}</Text>
+        <Text style={styles.sectionKicker}>{pageMeta.kicker}</Text>
+        <Text style={styles.pageTitle}>{pageMeta.title}</Text>
+        <Text style={styles.pageSubtitle}>{pageMeta.subtitle}</Text>
       </View>}
 
       {actionMessage ? <View style={styles.actionMessage}><Text style={styles.actionMessageText}>{actionMessage}</Text></View> : null}
@@ -766,7 +869,7 @@ export function MobileDashboard({ user }: { user: User }) {
               </Pressable>
             )) : <Text style={styles.emptyText}>Nenhum projeto cadastrado.</Text>}
         </View>
-      ) : (
+      ) : activePage === 'planning' ? (
         <View style={styles.sectionCard}>
           <View style={styles.monthNavigator}>
             <Pressable accessibilityLabel="Mês anterior" onPress={() => setPlanningMonth(new Date(planningMonth.getFullYear(), planningMonth.getMonth() - 1, 1))} style={styles.monthButton}><Text style={styles.monthButtonText}>‹</Text></Pressable>
@@ -829,6 +932,27 @@ export function MobileDashboard({ user }: { user: User }) {
             ))}
           </View> : null}
         </View>
+      ) : (
+        <View>
+          <View style={styles.clientsToolbar}>
+            <TextInput autoCapitalize="none" onChangeText={setClientQuery} placeholder="Buscar por nome ou contato" placeholderTextColor="#B69B91" style={styles.clientSearchInput} value={clientQuery} />
+            <Pressable accessibilityLabel="Cadastrar cliente" onPress={openNewClient} style={styles.newClientButton}><Text style={styles.newClientButtonText}>＋</Text></Pressable>
+          </View>
+          <Text style={styles.clientCount}>{filteredClients.length} {filteredClients.length === 1 ? 'cliente' : 'clientes'}</Text>
+          {filteredClients.length ? filteredClients.map((client) => {
+            const orders = projects.filter((project) => project.client?.trim().toLocaleLowerCase('pt-BR') === client.name.trim().toLocaleLowerCase('pt-BR')).length
+            return <Pressable key={client.id} onPress={() => openEditClient(client)} style={({ pressed }) => [styles.clientCard, pressed && styles.projectRowPressed]}>
+              <View style={styles.clientAvatar}><Text style={styles.clientAvatarText}>{client.name.trim().charAt(0).toLocaleUpperCase('pt-BR') || '♡'}</Text></View>
+              <View style={styles.rowBody}>
+                <Text style={styles.clientName}>{client.name}</Text>
+                <Text style={styles.rowMeta}>{orders} {orders === 1 ? 'encomenda' : 'encomendas'}{client.phone ? ` · ${client.phone}` : ''}</Text>
+                {client.instagram ? <Text style={styles.clientContact}>@{client.instagram.replace(/^@/, '')}</Text> : client.email ? <Text style={styles.clientContact}>{client.email}</Text> : null}
+                {client.notes ? <Text numberOfLines={2} style={styles.clientNotes}>{client.notes}</Text> : null}
+              </View>
+              <Text style={styles.editGlyph}>✎</Text>
+            </Pressable>
+          }) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>♡</Text><Text style={styles.sectionTitle}>{clientQuery ? 'Nenhuma cliente encontrada' : 'Nenhuma cliente cadastrada'}</Text><Text style={styles.emptyText}>{clientQuery ? 'Tente buscar por outro nome ou contato.' : 'Toque no botão + para cadastrar a primeira cliente.'}</Text></View>}
+        </View>
       )}
 
       <Pressable onPress={() => signOut(auth)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
@@ -840,7 +964,7 @@ export function MobileDashboard({ user }: { user: User }) {
         <Pressable onPress={() => openPage('home')} style={[styles.navItem, activePage === 'home' && styles.navItemActive]}><Text style={styles.navIcon}>⌂</Text><Text style={styles.navText}>Início</Text></Pressable>
         <Pressable onPress={() => openPage('projects')} style={[styles.navItem, activePage === 'projects' && styles.navItemActive]}><Text style={styles.navIcon}>▦</Text><Text style={styles.navText}>Projetos</Text></Pressable>
         <Pressable onPress={() => openPage('planning')} style={[styles.navItem, activePage === 'planning' && styles.navItemActive]}><Text style={styles.navIcon}>✓</Text><Text style={styles.navText}>Planejamento</Text></Pressable>
-        <Pressable onPress={() => setMenuOpen(true)} style={styles.navItem}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
+        <Pressable onPress={() => setMenuOpen(true)} style={[styles.navItem, activePage === 'clients' && styles.navItemActive]}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
       </View>
     </View>
   )
@@ -912,6 +1036,7 @@ const styles = StyleSheet.create({
   removeUnavailableText: { color: '#706B77', fontSize: 7, fontWeight: '900' },
   taskFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   unavailableFormSheet: { paddingHorizontal: 20, paddingTop: 21, paddingBottom: 30, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
+  clientFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   formLabel: { marginTop: 13, marginBottom: 7, color: '#9A7D72', fontSize: 8, fontWeight: '900', letterSpacing: 0.7 },
   formInput: { minHeight: 48, paddingHorizontal: 13, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 12, backgroundColor: '#FFF7F6', color: '#704B3D', fontSize: 12 },
   dateInputRow: { flexDirection: 'row', gap: 9 },
@@ -937,6 +1062,18 @@ const styles = StyleSheet.create({
   addTaskButtonText: { color: '#FFFFFF', fontSize: 19, lineHeight: 21, fontWeight: '500' },
   editTaskButton: { width: 31, height: 31, alignItems: 'center', justifyContent: 'center', marginHorizontal: 5, borderRadius: 10, backgroundColor: '#FFF0EF' },
   editGlyph: { color: '#D77F8B', fontSize: 15, fontWeight: '900' },
+  clientsToolbar: { flexDirection: 'row', gap: 9, marginTop: 12 },
+  clientSearchInput: { flex: 1, minHeight: 49, paddingHorizontal: 14, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 13, backgroundColor: '#FFFBFA', color: '#704B3D', fontSize: 11 },
+  newClientButton: { width: 49, height: 49, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#D77F8B' },
+  newClientButtonText: { color: '#FFFFFF', fontSize: 25, lineHeight: 27, fontWeight: '500' },
+  clientCount: { marginTop: 10, marginBottom: 2, color: '#A48A80', fontSize: 8, fontWeight: '800', textAlign: 'right' },
+  clientCard: { minHeight: 94, flexDirection: 'row', alignItems: 'center', padding: 15, marginTop: 10, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 17, backgroundColor: '#FFFBFA' },
+  clientAvatar: { width: 45, height: 45, alignItems: 'center', justifyContent: 'center', marginRight: 12, borderRadius: 23, backgroundColor: '#F7DDDC' },
+  clientAvatarText: { color: '#D77F8B', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 21, fontWeight: '700' },
+  clientName: { color: '#704B3D', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 16 },
+  clientContact: { marginTop: 4, color: '#D77F8B', fontSize: 9, fontWeight: '800' },
+  clientNotes: { marginTop: 5, color: '#9A7D72', fontSize: 9, lineHeight: 13 },
+  clientEmpty: { minHeight: 240, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
   monthNavigator: { minHeight: 64, flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5, borderRadius: 15, backgroundColor: '#FFF5F4' },
   monthButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#F7DDDC' },
   monthButtonText: { color: '#9A6B56', fontSize: 30, lineHeight: 32, fontWeight: '500' },
