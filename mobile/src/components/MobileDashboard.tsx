@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { User } from 'firebase/auth'
 import { signOut } from 'firebase/auth'
-import { collection, doc, onSnapshot } from 'firebase/firestore'
+import { collection, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore'
 import {
   ActivityIndicator,
   Modal,
@@ -96,6 +96,8 @@ export function MobileDashboard({ user }: { user: User }) {
   const [now, setNow] = useState(Date.now())
   const [activePage, setActivePage] = useState<MobilePage>('home')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null)
+  const [actionMessage, setActionMessage] = useState('')
 
   useEffect(() => onSnapshot(doc(db, 'users', user.uid, 'settings', 'atelier'), (snapshot) => {
     if (snapshot.exists()) setSettings(snapshot.data() as AtelierSettings)
@@ -138,6 +140,25 @@ export function MobileDashboard({ user }: { user: User }) {
     setMenuOpen(false)
   }
 
+  async function toggleTask(task: Task) {
+    if (updatingTaskId) return
+    setUpdatingTaskId(task.id)
+    setActionMessage('')
+    try {
+      const completed = !task.completed
+      await updateDoc(doc(db, 'users', user.uid, 'tasks', task.id), {
+        completed,
+        completedAt: completed ? serverTimestamp() : null,
+      })
+      setActionMessage(completed ? 'Tarefa concluída com sucesso.' : 'Tarefa reaberta.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setActionMessage('Não foi possível atualizar a tarefa. Tente novamente.')
+    } finally {
+      setUpdatingTaskId(null)
+    }
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.dashboard} showsVerticalScrollIndicator={false}>
       <View style={styles.brandRow}>
@@ -177,6 +198,8 @@ export function MobileDashboard({ user }: { user: User }) {
         <Text style={styles.pageTitle}>{activePage === 'projects' ? 'Projetos' : 'Planejamento'}</Text>
         <Text style={styles.pageSubtitle}>{activePage === 'projects' ? 'Acompanhe todas as etapas das suas peças.' : 'Veja tarefas, prazos e o que precisa da sua atenção.'}</Text>
       </View>}
+
+      {actionMessage ? <View style={styles.actionMessage}><Text style={styles.actionMessageText}>{actionMessage}</Text></View> : null}
 
       {loading ? (
         <View style={styles.loadingCard}><ActivityIndicator color="#9A6B56" /><Text style={styles.loadingText}>Sincronizando seu ateliê...</Text></View>
@@ -240,7 +263,9 @@ export function MobileDashboard({ user }: { user: User }) {
               const linkedProject = projects.find((project) => project.id === task.projectId)
               return (
                 <View key={task.id} style={styles.taskRow}>
-                  <View style={[styles.priorityDot, task.priority === 'Alta' && styles.priorityHigh, task.priority === 'Baixa' && styles.priorityLow]} />
+                  <Pressable accessibilityLabel={`Concluir ${task.title}`} disabled={updatingTaskId === task.id} onPress={() => toggleTask(task)} style={styles.taskCheck}>
+                    {updatingTaskId === task.id ? <ActivityIndicator color="#D77F8B" size="small" /> : <Text style={styles.taskCheckText}>✓</Text>}
+                  </Pressable>
                   <View style={styles.rowBody}>
                     <Text style={[styles.rowTitle, isLate && styles.warningText]}>{task.title}</Text>
                     <Text style={styles.rowMeta}>{formatShortDate(task.endDate || task.date)}{linkedProject ? ` · ${linkedProject.title}` : ''}</Text>
@@ -299,7 +324,9 @@ export function MobileDashboard({ user }: { user: User }) {
             const linkedProject = projects.find((project) => project.id === task.projectId)
             const isLate = (task.endDate || task.date) < summary.today && !inactiveStatuses.has(linkedProject?.status ?? '')
             return <View key={task.id} style={styles.taskRowLarge}>
-              <View style={[styles.priorityDot, task.priority === 'Alta' && styles.priorityHigh, task.priority === 'Baixa' && styles.priorityLow]} />
+              <Pressable accessibilityLabel={`Concluir ${task.title}`} disabled={updatingTaskId === task.id} onPress={() => toggleTask(task)} style={styles.taskCheck}>
+                {updatingTaskId === task.id ? <ActivityIndicator color="#D77F8B" size="small" /> : <Text style={styles.taskCheckText}>✓</Text>}
+              </Pressable>
               <View style={styles.rowBody}>
                 <Text style={[styles.rowTitle, isLate && styles.warningText]}>{task.title}</Text>
                 <Text style={styles.rowMeta}>{formatShortDate(task.date)}{task.endDate && task.endDate !== task.date ? ` até ${formatShortDate(task.endDate)}` : ''}{linkedProject ? ` · ${linkedProject.title}` : ''}</Text>
@@ -307,6 +334,18 @@ export function MobileDashboard({ user }: { user: User }) {
               {isLate ? <Text style={styles.lateText}>ATRASADA</Text> : <Text style={styles.priorityText}>{task.priority}</Text>}
             </View>
           }) : <Text style={styles.emptyText}>Tudo em dia por aqui ✨</Text>}
+
+          {tasks.some((task) => task.completed) ? <View style={styles.completedSection}>
+            <Text style={styles.completedTitle}>CONCLUÍDAS RECENTEMENTE</Text>
+            {tasks.filter((task) => task.completed).slice(0, 5).map((task) => (
+              <View key={task.id} style={styles.completedRow}>
+                <Pressable accessibilityLabel={`Reabrir ${task.title}`} disabled={updatingTaskId === task.id} onPress={() => toggleTask(task)} style={[styles.taskCheck, styles.taskCheckCompleted]}>
+                  {updatingTaskId === task.id ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.taskCheckCompletedText}>✓</Text>}
+                </Pressable>
+                <View style={styles.rowBody}><Text style={styles.completedTaskText}>{task.title}</Text><Text style={styles.rowMeta}>Toque no check para reabrir</Text></View>
+              </View>
+            ))}
+          </View> : null}
         </View>
       )}
 
@@ -360,6 +399,8 @@ const styles = StyleSheet.create({
   pageHeading: { paddingHorizontal: 4, paddingVertical: 10 },
   pageTitle: { marginTop: 5, color: '#704B3D', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 28 },
   pageSubtitle: { marginTop: 5, color: '#9A7D72', fontSize: 11, lineHeight: 17 },
+  actionMessage: { marginTop: 10, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 12, backgroundColor: '#DFEFE3' },
+  actionMessageText: { color: '#55795E', fontSize: 10, fontWeight: '800', textAlign: 'center' },
   loadingCard: { minHeight: 150, alignItems: 'center', justifyContent: 'center', gap: 11, marginTop: 14, borderRadius: 18, backgroundColor: '#FFFBFA' },
   loadingText: { color: '#9A7D72', fontSize: 12 },
   summaryRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
@@ -382,6 +423,10 @@ const styles = StyleSheet.create({
   projectRow: { flexDirection: 'row', alignItems: 'center', minHeight: 58, borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
   projectRowLarge: { flexDirection: 'row', alignItems: 'center', minHeight: 69, borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
   taskRowLarge: { flexDirection: 'row', alignItems: 'center', minHeight: 65, borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
+  taskCheck: { width: 29, height: 29, alignItems: 'center', justifyContent: 'center', marginRight: 11, borderWidth: 1, borderColor: '#DDA4AA', borderRadius: 9, backgroundColor: '#FFF8F7' },
+  taskCheckText: { color: '#D77F8B', fontSize: 14, fontWeight: '900' },
+  taskCheckCompleted: { borderColor: '#73A276', backgroundColor: '#73A276' },
+  taskCheckCompletedText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
   priorityDot: { width: 8, height: 8, marginRight: 11, borderRadius: 4, backgroundColor: '#E6B75D' },
   priorityHigh: { backgroundColor: '#D86471' },
   priorityLow: { backgroundColor: '#7DAA91' },
@@ -392,6 +437,10 @@ const styles = StyleSheet.create({
   statusBadgeStandBy: { backgroundColor: '#E8E9EC', color: '#697080' },
   statusBadgeDone: { backgroundColor: '#DFEFE3', color: '#55795E' },
   priorityText: { color: '#A48A80', fontSize: 8, fontWeight: '800' },
+  completedSection: { marginTop: 22, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#ECD6D4' },
+  completedTitle: { marginBottom: 4, color: '#9A7D72', fontSize: 8, fontWeight: '900', letterSpacing: 0.8 },
+  completedRow: { flexDirection: 'row', alignItems: 'center', minHeight: 58 },
+  completedTaskText: { color: '#9A7D72', fontSize: 11, fontWeight: '700', textDecorationLine: 'line-through' },
   lateBadge: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, backgroundColor: '#FDE0DF', color: '#B84D5C', fontSize: 8, fontWeight: '900' },
   lateText: { color: '#B84D5C', fontSize: 7, fontWeight: '900' },
   warningText: { color: '#B84D5C' },
