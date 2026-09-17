@@ -28,6 +28,16 @@ type Project = {
   referenceLink?: string
   tags?: string[]
   sourceIdeaId?: string
+  materials?: ProjectMaterial[]
+}
+
+type ProjectMaterial = {
+  id: string
+  materialId: string
+  name: string
+  unit: string
+  quantity: number
+  unitCost: number
 }
 
 type ProjectForm = {
@@ -59,6 +69,8 @@ type TimeEntry = {
   projectId: string
   startedAt: string
   endedAt?: string
+  autoPaused?: boolean
+  pauseReason?: string
 }
 
 type UnavailableDay = {
@@ -217,6 +229,10 @@ function formatDuration(totalSeconds: number) {
   return hours > 0 ? `${hours}h ${String(minutes).padStart(2, '0')}min` : `${minutes}min`
 }
 
+function formatCurrency(value: number) {
+  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
 function useUserCollection<T extends { id: string }>(userId: string, name: string) {
   const [items, setItems] = useState<T[]>([])
   const [ready, setReady] = useState(false)
@@ -247,6 +263,10 @@ export function MobileDashboard({ user }: { user: User }) {
   const [settingsForm, setSettingsForm] = useState<SettingsForm>({ studioName: 'Reena Biscuit', subtitle: 'Ateliê de biscuit', ownerName: 'Renata', phone: '', instagram: '', email: '', city: '', state: '', timerPauseMinutes: 20, hourlyRate: '7,37' })
   const [savingSettings, setSavingSettings] = useState(false)
   const [settingsError, setSettingsError] = useState('')
+  const [selectedMaterialId, setSelectedMaterialId] = useState('')
+  const [materialUsageQuantity, setMaterialUsageQuantity] = useState('')
+  const [materialUsageError, setMaterialUsageError] = useState('')
+  const [materialUsageBusy, setMaterialUsageBusy] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const [activePage, setActivePage] = useState<MobilePage>('home')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -354,6 +374,17 @@ export function MobileDashboard({ user }: { user: User }) {
   const timerProjects = summary.activeProjects
   const selectedProject = timerProjects.find((project) => project.id === selectedProjectId)
   const selectedProjectDetails = projects.find((project) => project.id === selectedProjectDetailsId) ?? null
+  const selectedProjectTimeEntries = selectedProjectDetails
+    ? timeEntries.filter((entry) => entry.projectId === selectedProjectDetails.id)
+    : []
+  const selectedProjectSeconds = selectedProjectTimeEntries.reduce((total, entry) => {
+    const start = new Date(entry.startedAt).getTime()
+    const end = entry.endedAt ? new Date(entry.endedAt).getTime() : now
+    return total + Math.max(0, Math.floor((end - start) / 1000))
+  }, 0)
+  const selectedProjectMaterialCost = (selectedProjectDetails?.materials || []).reduce((total, item) => total + item.quantity * item.unitCost, 0)
+  const selectedProjectLaborCost = selectedProjectSeconds / 3600 * (settings.hourlyRate ?? 7.37)
+  const selectedProjectTotalCost = selectedProjectMaterialCost + selectedProjectLaborCost
   const planningMonthStart = dateKey(new Date(planningMonth.getFullYear(), planningMonth.getMonth(), 1))
   const planningMonthEnd = dateKey(new Date(planningMonth.getFullYear(), planningMonth.getMonth() + 1, 0))
   const planningMonthTasks = useMemo(() => tasks
@@ -808,6 +839,50 @@ export function MobileDashboard({ user }: { user: User }) {
     }
   }
 
+  async function addMaterialToProject() {
+    if (!selectedProjectDetails || materialUsageBusy) return
+    const material = materials.find((item) => item.id === selectedMaterialId)
+    const quantity = Number(materialUsageQuantity.replace(',', '.'))
+    if (!material || !Number.isFinite(quantity) || quantity <= 0) { setMaterialUsageError('Escolha um material e informe uma quantidade válida.'); return }
+    if (quantity > material.stock) { setMaterialUsageError(`Há apenas ${material.stock.toLocaleString('pt-BR')} ${material.unit} em estoque.`); return }
+    setMaterialUsageBusy(true)
+    setMaterialUsageError('')
+    const usage: ProjectMaterial = { id: `${new Date().toISOString()}-${selectedProjectDetails.materials?.length ?? 0}`, materialId: material.id, name: material.name, unit: material.unit, quantity, unitCost: material.unitCost }
+    try {
+      const batch = writeBatch(db)
+      batch.update(doc(db, 'users', user.uid, 'projects', selectedProjectDetails.id), { materials: [...(selectedProjectDetails.materials || []), usage] })
+      batch.update(doc(db, 'users', user.uid, 'materials', material.id), { stock: material.stock - quantity })
+      await batch.commit()
+      setSelectedMaterialId('')
+      setMaterialUsageQuantity('')
+      setActionMessage('Material lançado no projeto.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setMaterialUsageError('Não foi possível lançar o material.')
+    } finally {
+      setMaterialUsageBusy(false)
+    }
+  }
+
+  async function removeMaterialFromProject(usage: ProjectMaterial) {
+    if (!selectedProjectDetails || materialUsageBusy) return
+    const material = materials.find((item) => item.id === usage.materialId)
+    setMaterialUsageBusy(true)
+    setMaterialUsageError('')
+    try {
+      const batch = writeBatch(db)
+      batch.update(doc(db, 'users', user.uid, 'projects', selectedProjectDetails.id), { materials: (selectedProjectDetails.materials || []).filter((item) => item.id !== usage.id) })
+      if (material) batch.update(doc(db, 'users', user.uid, 'materials', material.id), { stock: material.stock + usage.quantity })
+      await batch.commit()
+      setActionMessage('Material removido e devolvido ao estoque.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setMaterialUsageError('Não foi possível remover o material.')
+    } finally {
+      setMaterialUsageBusy(false)
+    }
+  }
+
   async function startTimer() {
     if (!selectedProject || activeEntry || timerBusy) return
     setTimerBusy(true)
@@ -968,6 +1043,31 @@ export function MobileDashboard({ user }: { user: User }) {
                 <View><Text style={styles.detailLabel}>CATEGORIA</Text><Text style={styles.detailValue}>{selectedProjectDetails?.category || 'Não informada'}</Text></View>
               </View>
               {selectedProjectDetails?.description ? <View style={styles.projectDescription}><Text style={styles.detailLabel}>DESCRIÇÃO</Text><Text style={styles.projectDescriptionText}>{selectedProjectDetails.description}</Text></View> : null}
+              <View style={styles.projectCostSummary}>
+                <View style={styles.projectCostItem}><Text style={styles.detailLabel}>TEMPO</Text><Text style={styles.projectCostValue}>{formatDuration(selectedProjectSeconds)}</Text></View>
+                <View style={styles.projectCostItem}><Text style={styles.detailLabel}>MÃO DE OBRA</Text><Text style={styles.projectCostValue}>{formatCurrency(selectedProjectLaborCost)}</Text></View>
+                <View style={styles.projectCostItem}><Text style={styles.detailLabel}>MATERIAIS</Text><Text style={styles.projectCostValue}>{formatCurrency(selectedProjectMaterialCost)}</Text></View>
+              </View>
+              <View style={styles.projectTotalCard}><Text style={styles.projectTotalLabel}>VALOR ACUMULADO DA PEÇA</Text><Text style={styles.projectTotalValue}>{formatCurrency(selectedProjectTotalCost)}</Text></View>
+              <View style={styles.projectDetailSection}>
+                <View style={styles.projectDetailSectionHeading}><View><Text style={styles.detailLabel}>TEMPO TRABALHADO</Text><Text style={styles.projectSectionTitle}>Sessões do projeto</Text></View><Text style={styles.projectSectionTotal}>{formatDuration(selectedProjectSeconds)}</Text></View>
+                {selectedProjectTimeEntries.length ? [...selectedProjectTimeEntries].sort((first, second) => second.startedAt.localeCompare(first.startedAt)).map((entry) => {
+                  const start = new Date(entry.startedAt)
+                  const end = entry.endedAt ? new Date(entry.endedAt) : null
+                  const seconds = Math.max(0, Math.floor(((end?.getTime() ?? now) - start.getTime()) / 1000))
+                  return <View key={entry.id} style={styles.timeEntryRow}><View style={styles.rowBody}><Text style={styles.timeEntryDate}>{start.toLocaleDateString('pt-BR')}{entry.autoPaused ? ' · pausa automática' : ''}</Text><Text style={styles.rowMeta}>{start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — {end ? end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'em andamento'}</Text></View><Text style={styles.timeEntryDuration}>{formatDuration(seconds)}</Text></View>
+                }) : <Text style={styles.projectEmptyText}>Nenhum tempo registrado neste projeto.</Text>}
+              </View>
+              <View style={styles.projectDetailSection}>
+                <View style={styles.projectDetailSectionHeading}><View><Text style={styles.detailLabel}>MATERIAIS UTILIZADOS</Text><Text style={styles.projectSectionTitle}>Consumo da peça</Text></View><Text style={styles.projectSectionTotal}>{formatCurrency(selectedProjectMaterialCost)}</Text></View>
+                {(selectedProjectDetails?.materials || []).length ? (selectedProjectDetails?.materials || []).map((usage) => <View key={usage.id} style={styles.materialUsageRow}><View style={styles.rowBody}><Text style={styles.rowTitle}>{usage.name}</Text><Text style={styles.rowMeta}>{usage.quantity.toLocaleString('pt-BR')} {usage.unit} × {formatCurrency(usage.unitCost)}</Text></View><Text style={styles.materialUsageCost}>{formatCurrency(usage.quantity * usage.unitCost)}</Text><Pressable accessibilityLabel={`Remover ${usage.name}`} disabled={materialUsageBusy} onPress={() => removeMaterialFromProject(usage)} style={styles.materialUsageRemove}><Text style={styles.materialUsageRemoveText}>×</Text></Pressable></View>) : <Text style={styles.projectEmptyText}>Nenhum material lançado neste projeto.</Text>}
+                {materials.length ? <View style={styles.materialUsageForm}>
+                  <Text style={styles.formLabel}>ADICIONAR MATERIAL</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.materialUsagePicker}>{materials.map((material) => <Pressable key={material.id} onPress={() => { setSelectedMaterialId(material.id); setMaterialUsageError('') }} style={[styles.materialUsageOption, selectedMaterialId === material.id && styles.materialUsageOptionActive]}><Text style={[styles.materialUsageOptionName, selectedMaterialId === material.id && styles.materialUsageOptionNameActive]}>{material.name}</Text><Text style={styles.materialUsageOptionStock}>{material.stock.toLocaleString('pt-BR')} {material.unit}</Text></Pressable>)}</ScrollView>
+                  <View style={styles.materialUsageControls}><TextInput keyboardType="decimal-pad" onChangeText={(materialUsageQuantity) => { setMaterialUsageQuantity(materialUsageQuantity); setMaterialUsageError('') }} placeholder="Quantidade" placeholderTextColor="#B69B91" style={styles.materialUsageInput} value={materialUsageQuantity} /><Pressable disabled={materialUsageBusy} onPress={addMaterialToProject} style={({ pressed }) => [styles.materialUsageAdd, (pressed || materialUsageBusy) && styles.buttonPressed]}>{materialUsageBusy ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.materialUsageAddText}>＋ Adicionar</Text>}</Pressable></View>
+                  {materialUsageError ? <Text style={styles.formError}>{materialUsageError}</Text> : null}
+                </View> : <Text style={styles.projectEmptyText}>Cadastre materiais para poder lançá-los aqui.</Text>}
+              </View>
               <Text style={styles.statusTitle}>ETAPA DO PROJETO</Text>
               <View style={styles.statusGrid}>{projectStatuses.map((status) => <Pressable disabled={updatingProject} key={status} onPress={() => changeProjectStatus(status)} style={[styles.statusOption, selectedProjectDetails?.status === status && styles.statusOptionActive]}>
                 <View style={[styles.statusDot, status === 'Stand by' && styles.statusDotStandBy, (status === 'Pronto' || status === 'Entregue') && styles.statusDotDone]} />
@@ -1525,6 +1625,35 @@ const styles = StyleSheet.create({
   detailValue: { marginTop: 4, color: '#704B3D', fontSize: 10, fontWeight: '800' },
   projectDescription: { padding: 14, marginBottom: 18, borderRadius: 13, backgroundColor: '#FFF5F4' },
   projectDescriptionText: { marginTop: 6, color: '#8B6F65', fontSize: 10, lineHeight: 16 },
+  projectCostSummary: { flexDirection: 'row', gap: 7, marginBottom: 9 },
+  projectCostItem: { flex: 1, minHeight: 66, justifyContent: 'space-between', padding: 10, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 12, backgroundColor: '#FFFBFA' },
+  projectCostValue: { color: '#704B3D', fontSize: 11, fontWeight: '900' },
+  projectTotalCard: { minHeight: 65, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, marginBottom: 15, borderRadius: 13, backgroundColor: '#9A6B56' },
+  projectTotalLabel: { flex: 1, color: '#FDEDEC', fontSize: 8, fontWeight: '900', letterSpacing: 0.6 },
+  projectTotalValue: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
+  projectDetailSection: { padding: 13, marginBottom: 14, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 14, backgroundColor: '#FFFBFA' },
+  projectDetailSectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  projectSectionTitle: { marginTop: 3, color: '#704B3D', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 15 },
+  projectSectionTotal: { color: '#9A6B56', fontSize: 11, fontWeight: '900' },
+  projectEmptyText: { color: '#A48A80', fontSize: 9, lineHeight: 14 },
+  timeEntryRow: { minHeight: 46, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
+  timeEntryDate: { color: '#704B3D', fontSize: 9, fontWeight: '800' },
+  timeEntryDuration: { color: '#D77F8B', fontSize: 9, fontWeight: '900' },
+  materialUsageRow: { minHeight: 51, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
+  materialUsageCost: { marginLeft: 6, color: '#9A6B56', fontSize: 8, fontWeight: '900' },
+  materialUsageRemove: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', marginLeft: 6, borderRadius: 9, backgroundColor: '#FDE0DF' },
+  materialUsageRemoveText: { color: '#B84D5C', fontSize: 18, lineHeight: 20, fontWeight: '700' },
+  materialUsageForm: { marginTop: 12, paddingTop: 3 },
+  materialUsagePicker: { marginBottom: 10 },
+  materialUsageOption: { minWidth: 100, padding: 10, marginRight: 7, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 11, backgroundColor: '#FFF7F6' },
+  materialUsageOptionActive: { borderColor: '#D77F8B', backgroundColor: '#F8E3E2' },
+  materialUsageOptionName: { color: '#704B3D', fontSize: 9, fontWeight: '800' },
+  materialUsageOptionNameActive: { color: '#B84D5C' },
+  materialUsageOptionStock: { marginTop: 3, color: '#A48A80', fontSize: 7 },
+  materialUsageControls: { flexDirection: 'row', gap: 7 },
+  materialUsageInput: { flex: 1, minHeight: 43, paddingHorizontal: 11, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 11, backgroundColor: '#FFF7F6', color: '#704B3D', fontSize: 10 },
+  materialUsageAdd: { minWidth: 105, minHeight: 43, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: '#9A6B56' },
+  materialUsageAddText: { color: '#FFFFFF', fontSize: 9, fontWeight: '900' },
   statusTitle: { marginBottom: 9, color: '#9A7D72', fontSize: 8, fontWeight: '900', letterSpacing: 0.8 },
   statusGrid: { gap: 7 },
   statusOption: { minHeight: 45, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 13, borderWidth: 1, borderColor: '#EEE0DE', borderRadius: 12 },
