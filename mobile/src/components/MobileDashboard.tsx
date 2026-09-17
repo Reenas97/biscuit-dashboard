@@ -143,10 +143,32 @@ type IdeaForm = {
 }
 
 type AtelierSettings = {
+  studioName?: string
+  subtitle?: string
   ownerName?: string
+  phone?: string
+  instagram?: string
+  email?: string
+  city?: string
+  state?: string
+  timerPauseMinutes?: number
+  hourlyRate?: number
 }
 
-type MobilePage = 'home' | 'projects' | 'planning' | 'clients' | 'materials' | 'ideas'
+type SettingsForm = {
+  studioName: string
+  subtitle: string
+  ownerName: string
+  phone: string
+  instagram: string
+  email: string
+  city: string
+  state: string
+  timerPauseMinutes: number
+  hourlyRate: string
+}
+
+type MobilePage = 'home' | 'projects' | 'planning' | 'clients' | 'materials' | 'ideas' | 'settings'
 
 const inactiveStatuses = new Set(['Stand by', 'Pronto', 'Entregue'])
 const projectStatuses = ['Planejamento', 'Stand by', 'Modelagem', 'Secagem', 'Pintura', 'Finalização', 'Envernização', 'Pronto', 'Entregue']
@@ -222,6 +244,9 @@ export function MobileDashboard({ user }: { user: User }) {
   const { items: materials, ready: materialsReady } = useUserCollection<Material>(user.uid, 'materials')
   const { items: ideas, ready: ideasReady } = useUserCollection<Idea>(user.uid, 'ideas')
   const [settings, setSettings] = useState<AtelierSettings>({})
+  const [settingsForm, setSettingsForm] = useState<SettingsForm>({ studioName: 'Reena Biscuit', subtitle: 'Ateliê de biscuit', ownerName: 'Renata', phone: '', instagram: '', email: '', city: '', state: '', timerPauseMinutes: 20, hourlyRate: '7,37' })
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [settingsError, setSettingsError] = useState('')
   const [now, setNow] = useState(() => Date.now())
   const [activePage, setActivePage] = useState<MobilePage>('home')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -263,7 +288,22 @@ export function MobileDashboard({ user }: { user: User }) {
   const [savingProject, setSavingProject] = useState(false)
 
   useEffect(() => onSnapshot(doc(db, 'users', user.uid, 'settings', 'atelier'), (snapshot) => {
-    if (snapshot.exists()) setSettings(snapshot.data() as AtelierSettings)
+    if (snapshot.exists()) {
+      const data = snapshot.data() as AtelierSettings
+      setSettings(data)
+      setSettingsForm({
+        studioName: data.studioName || 'Reena Biscuit',
+        subtitle: data.subtitle || 'Ateliê de biscuit',
+        ownerName: data.ownerName || 'Renata',
+        phone: data.phone || '',
+        instagram: data.instagram || '',
+        email: data.email || '',
+        city: data.city || '',
+        state: data.state || '',
+        timerPauseMinutes: data.timerPauseMinutes || 20,
+        hourlyRate: String(data.hourlyRate ?? 7.37).replace('.', ','),
+      })
+    }
   }), [user.uid])
 
   const activeEntry = timeEntries.find((entry) => !entry.endedAt)
@@ -375,7 +415,9 @@ export function MobileDashboard({ user }: { user: User }) {
         ? { kicker: '♡ CLIENTES DO ATELIÊ', title: 'Clientes', subtitle: 'Contatos e histórico de quem encomenda suas peças.' }
         : activePage === 'materials'
           ? { kicker: '□ ESTOQUE DO ATELIÊ', title: 'Materiais', subtitle: 'Controle quantidades, custos e o que precisa ser reposto.' }
-          : { kicker: '✦ BANCO DE INSPIRAÇÕES', title: 'Ideias', subtitle: 'Guarde referências e organize suas próximas criações.' }
+          : activePage === 'ideas'
+            ? { kicker: '✦ BANCO DE INSPIRAÇÕES', title: 'Ideias', subtitle: 'Guarde referências e organize suas próximas criações.' }
+            : { kicker: '⚙ PERSONALIZAÇÃO', title: 'Configurações', subtitle: 'Ajuste os dados e o funcionamento do seu ateliê.' }
 
   function openPage(page: MobilePage) {
     setActivePage(page)
@@ -735,6 +777,37 @@ export function MobileDashboard({ user }: { user: User }) {
     }
   }
 
+  async function saveSettingsForm() {
+    if (savingSettings) return
+    const hourlyRate = Number(settingsForm.hourlyRate.replace(',', '.'))
+    if (!settingsForm.studioName.trim() || !settingsForm.ownerName.trim()) { setSettingsError('Informe o nome do ateliê e da artesã.'); return }
+    if (!Number.isFinite(hourlyRate) || hourlyRate < 0) { setSettingsError('Informe um valor válido para a hora de trabalho.'); return }
+    setSavingSettings(true)
+    setSettingsError('')
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'settings', 'atelier'), {
+        ...settingsForm,
+        studioName: settingsForm.studioName.trim(),
+        subtitle: settingsForm.subtitle.trim(),
+        ownerName: settingsForm.ownerName.trim(),
+        phone: settingsForm.phone.trim(),
+        instagram: settingsForm.instagram.trim().replace(/^@/, ''),
+        email: settingsForm.email.trim(),
+        city: settingsForm.city.trim(),
+        state: settingsForm.state.trim().toLocaleUpperCase('pt-BR'),
+        hourlyRate,
+        currency: 'BRL',
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+      setActionMessage('Configurações salvas com sucesso.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setSettingsError('Não foi possível salvar as configurações.')
+    } finally {
+      setSavingSettings(false)
+    }
+  }
+
   async function startTimer() {
     if (!selectedProject || activeEntry || timerBusy) return
     setTimerBusy(true)
@@ -854,6 +927,7 @@ export function MobileDashboard({ user }: { user: User }) {
             <Pressable onPress={() => openPage('clients')} style={[styles.menuItem, activePage === 'clients' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>♡</Text><Text style={styles.menuItemText}>Clientes</Text></Pressable>
             <Pressable onPress={() => openPage('materials')} style={[styles.menuItem, activePage === 'materials' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>□</Text><Text style={styles.menuItemText}>Materiais</Text></Pressable>
             <Pressable onPress={() => openPage('ideas')} style={[styles.menuItem, activePage === 'ideas' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>✦</Text><Text style={styles.menuItemText}>Ideias</Text></Pressable>
+            <Pressable onPress={() => openPage('settings')} style={[styles.menuItem, activePage === 'settings' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>⚙</Text><Text style={styles.menuItemText}>Configurações</Text></Pressable>
             <View style={styles.menuDivider} />
             <View style={styles.menuSync}><View style={styles.liveDot} /><Text style={styles.menuSyncText}>Firebase conectado e sincronizado</Text></View>
             <Pressable onPress={() => signOut(auth)} style={styles.menuLogout}><Text style={styles.menuLogoutText}>Sair da conta</Text></Pressable>
@@ -1344,7 +1418,7 @@ export function MobileDashboard({ user }: { user: User }) {
             </Pressable>
           }) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>□</Text><Text style={styles.sectionTitle}>{materialQuery ? 'Nenhum material encontrado' : 'Nenhum material cadastrado'}</Text><Text style={styles.emptyText}>{materialQuery ? 'Tente buscar por outro nome ou categoria.' : 'Toque no botão + para cadastrar o primeiro material.'}</Text></View>}
         </View>
-      ) : (
+      ) : activePage === 'ideas' ? (
         <View>
           <View style={styles.ideasFilterRow}>
             <TextInput autoCapitalize="none" onChangeText={setIdeaQuery} placeholder="Pesquisar ideias..." placeholderTextColor="#B69B91" style={styles.clientSearchInput} value={ideaQuery} />
@@ -1367,6 +1441,33 @@ export function MobileDashboard({ user }: { user: User }) {
             </View>
           </View>) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>✦</Text><Text style={styles.sectionTitle}>Nenhuma ideia encontrada</Text><Text style={styles.emptyText}>Mude a busca ou toque em + para guardar uma inspiração.</Text></View>}
         </View>
+      ) : (
+        <View>
+          <View style={styles.settingsCard}>
+            <Text style={styles.settingsCardTitle}>Identidade do ateliê</Text>
+            <Text style={styles.settingsCardText}>Essas informações aparecem no aplicativo e no dashboard.</Text>
+            <Text style={styles.formLabel}>NOME DO ATELIÊ</Text><TextInput onChangeText={(studioName) => setSettingsForm((current) => ({ ...current, studioName }))} style={styles.formInput} value={settingsForm.studioName} />
+            <Text style={styles.formLabel}>SUBTÍTULO</Text><TextInput onChangeText={(subtitle) => setSettingsForm((current) => ({ ...current, subtitle }))} style={styles.formInput} value={settingsForm.subtitle} />
+            <Text style={styles.formLabel}>NOME DA ARTESÃ</Text><TextInput onChangeText={(ownerName) => setSettingsForm((current) => ({ ...current, ownerName }))} style={styles.formInput} value={settingsForm.ownerName} />
+          </View>
+          <View style={styles.settingsCard}>
+            <Text style={styles.settingsCardTitle}>Contatos</Text>
+            <Text style={styles.formLabel}>TELEFONE / WHATSAPP</Text><TextInput keyboardType="phone-pad" onChangeText={(phone) => setSettingsForm((current) => ({ ...current, phone }))} placeholder="(00) 00000-0000" placeholderTextColor="#B69B91" style={styles.formInput} value={settingsForm.phone} />
+            <Text style={styles.formLabel}>INSTAGRAM</Text><TextInput autoCapitalize="none" onChangeText={(instagram) => setSettingsForm((current) => ({ ...current, instagram }))} placeholder="@seu_atelie" placeholderTextColor="#B69B91" style={styles.formInput} value={settingsForm.instagram} />
+            <Text style={styles.formLabel}>E-MAIL</Text><TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={(email) => setSettingsForm((current) => ({ ...current, email }))} style={styles.formInput} value={settingsForm.email} />
+            <View style={styles.materialNumberRow}><View style={styles.dateInputGroup}><Text style={styles.formLabel}>CIDADE</Text><TextInput onChangeText={(city) => setSettingsForm((current) => ({ ...current, city }))} style={styles.formInput} value={settingsForm.city} /></View><View style={styles.settingsStateField}><Text style={styles.formLabel}>ESTADO</Text><TextInput autoCapitalize="characters" maxLength={2} onChangeText={(state) => setSettingsForm((current) => ({ ...current, state: state.toLocaleUpperCase('pt-BR') }))} placeholder="UF" placeholderTextColor="#B69B91" style={styles.formInput} value={settingsForm.state} /></View></View>
+          </View>
+          <View style={styles.settingsCard}>
+            <Text style={styles.settingsCardTitle}>Valor do trabalho</Text><Text style={styles.settingsCardText}>Quanto cada hora trabalhada acrescenta ao valor da peça.</Text>
+            <Text style={styles.formLabel}>VALOR DA HORA (R$)</Text><TextInput keyboardType="decimal-pad" onChangeText={(hourlyRate) => setSettingsForm((current) => ({ ...current, hourlyRate }))} placeholder="7,37" placeholderTextColor="#B69B91" style={styles.formInput} value={settingsForm.hourlyRate} />
+          </View>
+          <View style={styles.settingsCard}>
+            <Text style={styles.settingsCardTitle}>Pausa automática</Text><Text style={styles.settingsCardText}>Tempo de inatividade antes de pausar o projeto.</Text>
+            <View style={styles.pauseOptions}>{[{ value: 10, label: '10min' }, { value: 20, label: '20min' }, { value: 30, label: '30min' }, { value: 40, label: '40min' }, { value: 60, label: '1h' }, { value: 90, label: '1h30' }, { value: 120, label: '2h' }].map((option) => <Pressable key={option.value} onPress={() => setSettingsForm((current) => ({ ...current, timerPauseMinutes: option.value }))} style={[styles.pauseOption, settingsForm.timerPauseMinutes === option.value && styles.pauseOptionActive]}><Text style={[styles.pauseOptionText, settingsForm.timerPauseMinutes === option.value && styles.pauseOptionTextActive]}>{option.label}</Text></Pressable>)}</View>
+          </View>
+          {settingsError ? <Text style={styles.formError}>{settingsError}</Text> : null}
+          <Pressable disabled={savingSettings} onPress={saveSettingsForm} style={({ pressed }) => [styles.settingsSaveButton, (pressed || savingSettings) && styles.buttonPressed]}>{savingSettings ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>Salvar configurações</Text>}</Pressable>
+        </View>
       )}
 
       <Pressable onPress={() => signOut(auth)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
@@ -1378,7 +1479,7 @@ export function MobileDashboard({ user }: { user: User }) {
         <Pressable onPress={() => openPage('home')} style={[styles.navItem, activePage === 'home' && styles.navItemActive]}><Text style={styles.navIcon}>⌂</Text><Text style={styles.navText}>Início</Text></Pressable>
         <Pressable onPress={() => openPage('projects')} style={[styles.navItem, activePage === 'projects' && styles.navItemActive]}><Text style={styles.navIcon}>▦</Text><Text style={styles.navText}>Projetos</Text></Pressable>
         <Pressable onPress={() => openPage('planning')} style={[styles.navItem, activePage === 'planning' && styles.navItemActive]}><Text style={styles.navIcon}>✓</Text><Text style={styles.navText}>Planejamento</Text></Pressable>
-        <Pressable onPress={() => setMenuOpen(true)} style={[styles.navItem, (activePage === 'clients' || activePage === 'materials' || activePage === 'ideas') && styles.navItemActive]}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
+        <Pressable onPress={() => setMenuOpen(true)} style={[styles.navItem, (activePage === 'clients' || activePage === 'materials' || activePage === 'ideas' || activePage === 'settings') && styles.navItemActive]}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
       </View>
     </View>
   )
@@ -1541,6 +1642,16 @@ const styles = StyleSheet.create({
   ideaLinkText: { color: '#D77F8B', fontSize: 8, fontWeight: '900' },
   convertIdeaButton: { paddingHorizontal: 9, paddingVertical: 7, borderRadius: 9, backgroundColor: '#E9D6CC' },
   convertIdeaText: { color: '#704B3D', fontSize: 7, fontWeight: '900' },
+  settingsCard: { padding: 17, marginTop: 12, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 18, backgroundColor: '#FFFBFA' },
+  settingsCardTitle: { color: '#704B3D', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 18 },
+  settingsCardText: { marginTop: 5, marginBottom: 3, color: '#9A7D72', fontSize: 9, lineHeight: 14 },
+  settingsStateField: { width: 80 },
+  pauseOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 13 },
+  pauseOption: { minWidth: '22%', minHeight: 40, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 9, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 11, backgroundColor: '#FFF7F6' },
+  pauseOptionActive: { borderColor: '#D77F8B', backgroundColor: '#F8E3E2' },
+  pauseOptionText: { color: '#9A7D72', fontSize: 9, fontWeight: '900' },
+  pauseOptionTextActive: { color: '#704B3D' },
+  settingsSaveButton: { minHeight: 51, alignItems: 'center', justifyContent: 'center', marginTop: 14, borderRadius: 13, backgroundColor: '#9A6B56' },
   monthNavigator: { minHeight: 64, flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5, borderRadius: 15, backgroundColor: '#FFF5F4' },
   monthButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#F7DDDC' },
   monthButtonText: { color: '#9A6B56', fontSize: 30, lineHeight: 32, fontWeight: '500' },
