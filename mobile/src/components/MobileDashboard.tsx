@@ -174,6 +174,26 @@ type GoalForm = {
   deadline: string
 }
 
+type FinancialTransaction = {
+  id: string
+  type: 'Receita' | 'Despesa'
+  description: string
+  amount: number
+  date: string
+  category: string
+  projectId?: string
+}
+
+type TransactionForm = {
+  id?: string
+  type: 'Receita' | 'Despesa'
+  description: string
+  amount: string
+  date: string
+  category: string
+  projectId: string
+}
+
 type AtelierSettings = {
   studioName?: string
   subtitle?: string
@@ -200,7 +220,7 @@ type SettingsForm = {
   hourlyRate: string
 }
 
-type MobilePage = 'home' | 'projects' | 'planning' | 'clients' | 'materials' | 'ideas' | 'settings' | 'goals'
+type MobilePage = 'home' | 'projects' | 'planning' | 'clients' | 'materials' | 'ideas' | 'settings' | 'goals' | 'finance'
 
 const inactiveStatuses = new Set(['Stand by', 'Pronto', 'Entregue'])
 const projectStatuses = ['Planejamento', 'Stand by', 'Modelagem', 'Secagem', 'Pintura', 'Finalização', 'Envernização', 'Pronto', 'Entregue']
@@ -291,6 +311,7 @@ export function MobileDashboard({ user }: { user: User }) {
   const { items: materials, ready: materialsReady } = useUserCollection<Material>(user.uid, 'materials')
   const { items: ideas, ready: ideasReady } = useUserCollection<Idea>(user.uid, 'ideas')
   const { items: goals, ready: goalsReady } = useUserCollection<Goal>(user.uid, 'goals')
+  const { items: transactions, ready: transactionsReady } = useUserCollection<FinancialTransaction>(user.uid, 'transactions')
   const [settings, setSettings] = useState<AtelierSettings>({})
   const [settingsForm, setSettingsForm] = useState<SettingsForm>({ studioName: 'Reena Biscuit', subtitle: 'Ateliê de biscuit', ownerName: 'Renata', phone: '', instagram: '', email: '', city: '', state: '', timerPauseMinutes: 20, hourlyRate: '7,37' })
   const [savingSettings, setSavingSettings] = useState(false)
@@ -302,6 +323,13 @@ export function MobileDashboard({ user }: { user: User }) {
   const [goalForm, setGoalForm] = useState<GoalForm | null>(null)
   const [goalFormError, setGoalFormError] = useState('')
   const [savingGoal, setSavingGoal] = useState(false)
+  const [financialMonth, setFinancialMonth] = useState(() => {
+    const today = new Date()
+    return new Date(today.getFullYear(), today.getMonth(), 1)
+  })
+  const [transactionForm, setTransactionForm] = useState<TransactionForm | null>(null)
+  const [transactionFormError, setTransactionFormError] = useState('')
+  const [savingTransaction, setSavingTransaction] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const [activePage, setActivePage] = useState<MobilePage>('home')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -405,7 +433,7 @@ export function MobileDashboard({ user }: { user: User }) {
     ? Math.max(0, Math.floor((now - new Date(activeEntry.startedAt).getTime()) / 1000))
     : 0
   const ownerFirstName = settings.ownerName?.trim().split(/\s+/)[0] || 'Renata'
-  const loading = !projectsReady || !tasksReady || !timeReady || !unavailableReady || !clientsReady || !materialsReady || !ideasReady || !goalsReady
+  const loading = !projectsReady || !tasksReady || !timeReady || !unavailableReady || !clientsReady || !materialsReady || !ideasReady || !goalsReady || !transactionsReady
   const timerProjects = summary.activeProjects
   const selectedProject = timerProjects.find((project) => project.id === selectedProjectId)
   const selectedProjectDetails = projects.find((project) => project.id === selectedProjectDetailsId) ?? null
@@ -475,6 +503,21 @@ export function MobileDashboard({ user }: { user: User }) {
   }, [ideaQuery, ideas, showFavoriteIdeas])
   const completedGoals = goals.filter((goal) => goal.current >= goal.target)
   const overdueGoals = goals.filter((goal) => goal.current < goal.target && Boolean(goal.deadline) && (goal.deadline || '') < summary.today)
+  const financialMonthKey = `${financialMonth.getFullYear()}-${String(financialMonth.getMonth() + 1).padStart(2, '0')}`
+  const financialMonthLabel = financialMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^./, (letter) => letter.toLocaleUpperCase('pt-BR'))
+  const monthlyTransactions = transactions.filter((transaction) => transaction.date.startsWith(financialMonthKey)).sort((first, second) => second.date.localeCompare(first.date))
+  const monthlyIncome = monthlyTransactions.filter((transaction) => transaction.type === 'Receita').reduce((total, transaction) => total + transaction.amount, 0)
+  const monthlyExpenses = monthlyTransactions.filter((transaction) => transaction.type === 'Despesa').reduce((total, transaction) => total + transaction.amount, 0)
+  const monthlyBalance = monthlyIncome - monthlyExpenses
+  const projectCosts = projects.map((project) => {
+    const seconds = timeEntries.filter((entry) => entry.projectId === project.id).reduce((total, entry) => {
+      const start = new Date(entry.startedAt).getTime()
+      const end = entry.endedAt ? new Date(entry.endedAt).getTime() : now
+      return total + Math.max(0, Math.floor((end - start) / 1000))
+    }, 0)
+    const materialCost = (project.materials || []).reduce((total, item) => total + item.quantity * item.unitCost, 0)
+    return { project, seconds, materialCost, laborCost: seconds / 3600 * (settings.hourlyRate ?? 7.37) }
+  }).filter((item) => item.seconds > 0 || item.materialCost > 0).sort((first, second) => (second.materialCost + second.laborCost) - (first.materialCost + first.laborCost))
   const pageMeta = activePage === 'projects'
     ? { kicker: '🐾 PRODUÇÃO', title: 'Projetos', subtitle: 'Acompanhe todas as etapas das suas peças.' }
     : activePage === 'planning'
@@ -487,7 +530,9 @@ export function MobileDashboard({ user }: { user: User }) {
             ? { kicker: '✦ BANCO DE INSPIRAÇÕES', title: 'Ideias', subtitle: 'Guarde referências e organize suas próximas criações.' }
             : activePage === 'settings'
               ? { kicker: '⚙ PERSONALIZAÇÃO', title: 'Configurações', subtitle: 'Ajuste os dados e o funcionamento do seu ateliê.' }
-              : { kicker: '◎ OBJETIVOS DO ATELIÊ', title: 'Metas', subtitle: 'Acompanhe seus planos e cada avanço conquistado.' }
+              : activePage === 'goals'
+                ? { kicker: '◎ OBJETIVOS DO ATELIÊ', title: 'Metas', subtitle: 'Acompanhe seus planos e cada avanço conquistado.' }
+                : { kicker: 'R$ MOVIMENTO DO ATELIÊ', title: 'Financeiro', subtitle: 'Registre entradas, saídas e acompanhe os custos das suas peças.' }
 
   function openPage(page: MobilePage) {
     setActivePage(page)
@@ -964,6 +1009,62 @@ export function MobileDashboard({ user }: { user: User }) {
     }
   }
 
+  function openNewTransaction() {
+    setTransactionFormError('')
+    setTransactionForm({ type: 'Receita', description: '', amount: '', date: formatInputDate(summary.today), category: '', projectId: '' })
+  }
+
+  function openEditTransaction(transaction: FinancialTransaction) {
+    setTransactionFormError('')
+    setTransactionForm({
+      id: transaction.id,
+      type: transaction.type,
+      description: transaction.description,
+      amount: String(transaction.amount).replace('.', ','),
+      date: formatInputDate(transaction.date),
+      category: transaction.category,
+      projectId: transaction.projectId || '',
+    })
+  }
+
+  async function saveTransactionForm() {
+    if (!transactionForm || savingTransaction) return
+    const amount = Number(transactionForm.amount.replace(',', '.'))
+    const date = parseInputDate(transactionForm.date)
+    if (!transactionForm.description.trim()) { setTransactionFormError('Informe a descrição do lançamento.'); return }
+    if (!Number.isFinite(amount) || amount <= 0) { setTransactionFormError('Informe um valor maior que zero.'); return }
+    if (!date) { setTransactionFormError('Use uma data válida no formato dia/mês/ano.'); return }
+    if (!transactionForm.category.trim()) { setTransactionFormError('Informe uma categoria.'); return }
+    setSavingTransaction(true)
+    setTransactionFormError('')
+    const data = {
+      type: transactionForm.type,
+      description: transactionForm.description.trim(),
+      amount,
+      date,
+      category: transactionForm.category.trim(),
+      projectId: transactionForm.projectId || '',
+    }
+    try {
+      if (transactionForm.id) {
+        await updateDoc(doc(db, 'users', user.uid, 'transactions', transactionForm.id), data)
+      } else {
+        const transactionId = `${new Date().toISOString()}-${transactions.length}`
+        const batch = writeBatch(db)
+        batch.set(doc(db, 'users', user.uid, 'transactions', transactionId), { id: transactionId, ...data, createdAt: new Date().toISOString() })
+        batch.set(doc(db, 'users', user.uid, 'transactions', '_index'), { ids: arrayUnion(transactionId), updatedAt: serverTimestamp() }, { merge: true })
+        await batch.commit()
+      }
+      setTransactionForm(null)
+      setActionMessage(transactionForm.id ? 'Lançamento atualizado.' : 'Lançamento salvo com sucesso.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setTransactionFormError('Não foi possível salvar o lançamento.')
+    } finally {
+      setSavingTransaction(false)
+    }
+  }
+
   async function startTimer() {
     if (!selectedProject || activeEntry || timerBusy) return
     setTimerBusy(true)
@@ -1085,6 +1186,7 @@ export function MobileDashboard({ user }: { user: User }) {
             <Pressable onPress={() => openPage('ideas')} style={[styles.menuItem, activePage === 'ideas' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>✦</Text><Text style={styles.menuItemText}>Ideias</Text></Pressable>
             <Pressable onPress={() => openPage('settings')} style={[styles.menuItem, activePage === 'settings' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>⚙</Text><Text style={styles.menuItemText}>Configurações</Text></Pressable>
             <Pressable onPress={() => openPage('goals')} style={[styles.menuItem, activePage === 'goals' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>◎</Text><Text style={styles.menuItemText}>Metas</Text></Pressable>
+            <Pressable onPress={() => openPage('finance')} style={[styles.menuItem, activePage === 'finance' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>R$</Text><Text style={styles.menuItemText}>Financeiro</Text></Pressable>
             <View style={styles.menuDivider} />
             <View style={styles.menuSync}><View style={styles.liveDot} /><Text style={styles.menuSyncText}>Firebase conectado e sincronizado</Text></View>
             <Pressable onPress={() => signOut(auth)} style={styles.menuLogout}><Text style={styles.menuLogoutText}>Sair da conta</Text></Pressable>
@@ -1372,6 +1474,27 @@ export function MobileDashboard({ user }: { user: User }) {
               <Text style={styles.formLabel}>PRAZO</Text><TextInput keyboardType="number-pad" maxLength={10} onChangeText={(deadline) => setGoalForm((current) => current ? { ...current, deadline: maskInputDate(deadline) } : current)} placeholder="DD/MM/AAAA (opcional)" placeholderTextColor="#B69B91" style={styles.formInput} value={goalForm?.deadline || ''} />
               {goalFormError ? <Text style={styles.formError}>{goalFormError}</Text> : null}
               <Pressable disabled={savingGoal} onPress={saveGoalForm} style={({ pressed }) => [styles.saveTaskButton, (pressed || savingGoal) && styles.buttonPressed]}>{savingGoal ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>{goalForm?.id ? 'Salvar progresso' : 'Criar meta'}</Text>}</Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal animationType="slide" onRequestClose={() => setTransactionForm(null)} transparent visible={Boolean(transactionForm)}>
+        <View style={styles.menuBackdrop}>
+          <View style={styles.transactionFormSheet}>
+            <View style={styles.menuHeading}>
+              <View style={styles.projectDetailsHeading}><Text style={styles.sectionKicker}>{transactionForm?.id ? 'EDITAR LANÇAMENTO' : 'NOVO LANÇAMENTO'}</Text><Text style={styles.menuTitle}>{transactionForm?.id ? 'Atualizar movimentação' : 'Registrar movimentação'}</Text></View>
+              <Pressable accessibilityLabel="Fechar formulário" onPress={() => setTransactionForm(null)} style={styles.menuClose}><Text style={styles.menuCloseText}>×</Text></Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.formLabel}>TIPO</Text><View style={styles.transactionTypeRow}>{(['Receita', 'Despesa'] as const).map((type) => <Pressable key={type} onPress={() => setTransactionForm((current) => current ? { ...current, type } : current)} style={[styles.transactionTypeOption, transactionForm?.type === type && (type === 'Receita' ? styles.transactionIncomeActive : styles.transactionExpenseActive)]}><Text style={[styles.transactionTypeText, transactionForm?.type === type && styles.transactionTypeTextActive]}>{type === 'Receita' ? '↑ Receita' : '↓ Despesa'}</Text></Pressable>)}</View>
+              <Text style={styles.formLabel}>DESCRIÇÃO</Text><TextInput onChangeText={(description) => setTransactionForm((current) => current ? { ...current, description } : current)} placeholder="Ex.: Pagamento da encomenda" placeholderTextColor="#B69B91" style={styles.formInput} value={transactionForm?.description || ''} />
+              <View style={styles.materialNumberRow}><View style={styles.dateInputGroup}><Text style={styles.formLabel}>VALOR (R$)</Text><TextInput keyboardType="decimal-pad" onChangeText={(amount) => setTransactionForm((current) => current ? { ...current, amount } : current)} placeholder="0,00" placeholderTextColor="#B69B91" style={styles.formInput} value={transactionForm?.amount || ''} /></View><View style={styles.dateInputGroup}><Text style={styles.formLabel}>DATA</Text><TextInput keyboardType="number-pad" maxLength={10} onChangeText={(date) => setTransactionForm((current) => current ? { ...current, date: maskInputDate(date) } : current)} placeholder="DD/MM/AAAA" placeholderTextColor="#B69B91" style={styles.formInput} value={transactionForm?.date || ''} /></View></View>
+              <Text style={styles.formLabel}>CATEGORIA</Text><TextInput onChangeText={(category) => setTransactionForm((current) => current ? { ...current, category } : current)} placeholder={transactionForm?.type === 'Receita' ? 'Ex.: Encomenda' : 'Ex.: Materiais'} placeholderTextColor="#B69B91" style={styles.formInput} value={transactionForm?.category || ''} />
+              <Text style={styles.formLabel}>PROJETO RELACIONADO (OPCIONAL)</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}><Pressable onPress={() => setTransactionForm((current) => current ? { ...current, projectId: '' } : current)} style={[styles.financeProjectOption, !transactionForm?.projectId && styles.financeProjectOptionActive]}><Text style={styles.financeProjectText}>Nenhum</Text></Pressable>{projects.map((project) => <Pressable key={project.id} onPress={() => setTransactionForm((current) => current ? { ...current, projectId: project.id } : current)} style={[styles.financeProjectOption, transactionForm?.projectId === project.id && styles.financeProjectOptionActive]}><Text numberOfLines={1} style={styles.financeProjectText}>{project.title}</Text></Pressable>)}</ScrollView>
+              {transactionFormError ? <Text style={styles.formError}>{transactionFormError}</Text> : null}
+              <Pressable disabled={savingTransaction} onPress={saveTransactionForm} style={({ pressed }) => [styles.saveTaskButton, (pressed || savingTransaction) && styles.buttonPressed]}>{savingTransaction ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>Salvar lançamento</Text>}</Pressable>
             </ScrollView>
           </View>
         </View>
@@ -1670,7 +1793,7 @@ export function MobileDashboard({ user }: { user: User }) {
           {settingsError ? <Text style={styles.formError}>{settingsError}</Text> : null}
           <Pressable disabled={savingSettings} onPress={saveSettingsForm} style={({ pressed }) => [styles.settingsSaveButton, (pressed || savingSettings) && styles.buttonPressed]}>{savingSettings ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>Salvar configurações</Text>}</Pressable>
         </View>
-      ) : (
+      ) : activePage === 'goals' ? (
         <View>
           <View style={styles.goalSummaryRow}>
             <View style={styles.goalSummaryCard}><Text style={styles.goalSummaryValue}>{goals.length}</Text><Text style={styles.goalSummaryLabel}>Metas</Text></View>
@@ -1696,6 +1819,32 @@ export function MobileDashboard({ user }: { user: User }) {
             </Pressable>
           }) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>◎</Text><Text style={styles.sectionTitle}>Nenhuma meta criada</Text><Text style={styles.emptyText}>Toque no botão + para começar a acompanhar um objetivo.</Text></View>}
         </View>
+      ) : (
+        <View>
+          <View style={styles.monthNavigator}>
+            <Pressable onPress={() => setFinancialMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))} style={styles.monthButton}><Text style={styles.monthButtonText}>‹</Text></Pressable>
+            <Pressable onPress={() => { const today = new Date(); setFinancialMonth(new Date(today.getFullYear(), today.getMonth(), 1)) }} style={styles.monthLabelButton}><Text style={styles.monthLabel}>{financialMonthLabel}</Text><Text style={styles.monthTodayHint}>TOQUE PARA VOLTAR AO MÊS ATUAL</Text></Pressable>
+            <Pressable onPress={() => setFinancialMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))} style={styles.monthButton}><Text style={styles.monthButtonText}>›</Text></Pressable>
+          </View>
+          <View style={styles.financeSummaryRow}>
+            <View style={[styles.financeSummaryCard, styles.financeIncomeCard]}><Text style={styles.financeSummaryLabel}>RECEITAS</Text><Text numberOfLines={1} adjustsFontSizeToFit style={styles.financeIncomeValue}>{formatCurrency(monthlyIncome)}</Text></View>
+            <View style={[styles.financeSummaryCard, styles.financeExpenseCard]}><Text style={styles.financeSummaryLabel}>DESPESAS</Text><Text numberOfLines={1} adjustsFontSizeToFit style={styles.financeExpenseValue}>{formatCurrency(monthlyExpenses)}</Text></View>
+          </View>
+          <View style={[styles.financeBalanceCard, monthlyBalance < 0 && styles.financeBalanceNegative]}><View><Text style={styles.financeSummaryLabel}>SALDO DO MÊS</Text><Text numberOfLines={1} adjustsFontSizeToFit style={[styles.financeBalanceValue, monthlyBalance < 0 && styles.warningText]}>{formatCurrency(monthlyBalance)}</Text></View><Text style={styles.financeBalanceIcon}>{monthlyBalance >= 0 ? '↗' : '↘'}</Text></View>
+          <View style={styles.financeSectionHeading}><View><Text style={styles.sectionKicker}>MOVIMENTAÇÕES</Text><Text style={styles.sectionTitle}>{monthlyTransactions.length} {monthlyTransactions.length === 1 ? 'lançamento' : 'lançamentos'}</Text></View><Pressable accessibilityLabel="Novo lançamento" onPress={openNewTransaction} style={styles.newClientButton}><Text style={styles.newClientButtonText}>＋</Text></Pressable></View>
+          {monthlyTransactions.length ? monthlyTransactions.map((transaction) => {
+            const project = projects.find((item) => item.id === transaction.projectId)
+            return <Pressable key={transaction.id} onPress={() => openEditTransaction(transaction)} style={({ pressed }) => [styles.transactionCard, pressed && styles.projectRowPressed]}>
+              <View style={[styles.transactionIcon, transaction.type === 'Receita' ? styles.transactionIncomeIcon : styles.transactionExpenseIcon]}><Text style={styles.transactionIconText}>{transaction.type === 'Receita' ? '↑' : '↓'}</Text></View>
+              <View style={styles.rowBody}><Text style={styles.transactionCategory}>{transaction.category}</Text><Text style={styles.transactionDescription}>{transaction.description}</Text><Text style={styles.transactionMeta}>{formatShortDate(transaction.date)}{project ? ` · ${project.title}` : ''}</Text></View>
+              <Text style={transaction.type === 'Receita' ? styles.transactionIncomeAmount : styles.transactionExpenseAmount}>{transaction.type === 'Receita' ? '+' : '−'} {formatCurrency(transaction.amount)}</Text>
+            </Pressable>
+          }) : <View style={styles.financeEmpty}><Text style={styles.dayEmptyIcon}>R$</Text><Text style={styles.sectionTitle}>Nenhum lançamento neste mês</Text><Text style={styles.emptyText}>Toque no botão + para registrar uma receita ou despesa.</Text></View>}
+          <View style={styles.projectCostSection}>
+            <Text style={styles.sectionKicker}>CUSTOS DAS PEÇAS</Text><Text style={styles.sectionTitle}>Custos acumulados por projeto</Text><Text style={styles.sectionText}>Materiais utilizados e horas trabalhadas calculados automaticamente.</Text>
+            {projectCosts.length ? projectCosts.slice(0, 6).map(({ project, seconds, materialCost, laborCost }) => <View key={project.id} style={styles.projectCostRow}><View style={styles.rowBody}><Text style={styles.rowTitle}>{project.title}</Text><Text style={styles.rowMeta}>{formatDuration(seconds)} · materiais {formatCurrency(materialCost)}</Text></View><Text style={styles.financeProjectCostValue}>{formatCurrency(materialCost + laborCost)}</Text></View>) : <Text style={styles.projectEmptyText}>Os custos aparecerão quando houver materiais ou tempo lançados nos projetos.</Text>}
+          </View>
+        </View>
       )}
 
       <Pressable onPress={() => signOut(auth)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
@@ -1707,7 +1856,7 @@ export function MobileDashboard({ user }: { user: User }) {
         <Pressable onPress={() => openPage('home')} style={[styles.navItem, activePage === 'home' && styles.navItemActive]}><Text style={styles.navIcon}>⌂</Text><Text style={styles.navText}>Início</Text></Pressable>
         <Pressable onPress={() => openPage('projects')} style={[styles.navItem, activePage === 'projects' && styles.navItemActive]}><Text style={styles.navIcon}>▦</Text><Text style={styles.navText}>Projetos</Text></Pressable>
         <Pressable onPress={() => openPage('planning')} style={[styles.navItem, activePage === 'planning' && styles.navItemActive]}><Text style={styles.navIcon}>✓</Text><Text style={styles.navText}>Planejamento</Text></Pressable>
-        <Pressable onPress={() => setMenuOpen(true)} style={[styles.navItem, (activePage === 'clients' || activePage === 'materials' || activePage === 'ideas' || activePage === 'settings' || activePage === 'goals') && styles.navItemActive]}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
+        <Pressable onPress={() => setMenuOpen(true)} style={[styles.navItem, (activePage === 'clients' || activePage === 'materials' || activePage === 'ideas' || activePage === 'settings' || activePage === 'goals' || activePage === 'finance') && styles.navItemActive]}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
       </View>
     </View>
   )
@@ -1815,6 +1964,7 @@ const styles = StyleSheet.create({
   materialFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   ideaFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   goalFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
+  transactionFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   formLabel: { marginTop: 13, marginBottom: 7, color: '#9A7D72', fontSize: 8, fontWeight: '900', letterSpacing: 0.7 },
   formInput: { minHeight: 48, paddingHorizontal: 13, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 12, backgroundColor: '#FFF7F6', color: '#704B3D', fontSize: 12 },
   dateInputRow: { flexDirection: 'row', gap: 9 },
@@ -1830,6 +1980,15 @@ const styles = StyleSheet.create({
   goalTypeOptionActive: { borderColor: '#D77F8B', backgroundColor: '#F8E3E2' },
   goalTypeOptionText: { color: '#9A7D72', fontSize: 9, fontWeight: '800' },
   goalTypeOptionTextActive: { color: '#704B3D' },
+  transactionTypeRow: { flexDirection: 'row', gap: 8 },
+  transactionTypeOption: { flex: 1, minHeight: 45, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 12, backgroundColor: '#FFF7F6' },
+  transactionIncomeActive: { borderColor: '#73A276', backgroundColor: '#EAF5EC' },
+  transactionExpenseActive: { borderColor: '#D86471', backgroundColor: '#FDEAE9' },
+  transactionTypeText: { color: '#9A7D72', fontSize: 10, fontWeight: '900' },
+  transactionTypeTextActive: { color: '#704B3D' },
+  financeProjectOption: { maxWidth: 160, minHeight: 40, justifyContent: 'center', paddingHorizontal: 12, marginRight: 7, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 11, backgroundColor: '#FFF7F6' },
+  financeProjectOptionActive: { borderColor: '#D77F8B', backgroundColor: '#F8E3E2' },
+  financeProjectText: { color: '#704B3D', fontSize: 9, fontWeight: '800' },
   formProjectOption: { minHeight: 45, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, marginBottom: 6, borderWidth: 1, borderColor: '#EEE0DE', borderRadius: 11 },
   formProjectOptionActive: { borderColor: '#E6A2AA', backgroundColor: '#FBE8E7' },
   formProjectText: { flex: 1, color: '#704B3D', fontSize: 10, fontWeight: '700' },
@@ -1940,6 +2099,32 @@ const styles = StyleSheet.create({
   goalFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 11 },
   goalDeadline: { flex: 1, color: '#9A7D72', fontSize: 8, fontWeight: '700' },
   goalEditHint: { color: '#D77F8B', fontSize: 8, fontWeight: '900' },
+  financeSummaryRow: { flexDirection: 'row', gap: 8 },
+  financeSummaryCard: { flex: 1, minHeight: 91, justifyContent: 'space-between', padding: 14, borderWidth: 1, borderRadius: 16 },
+  financeIncomeCard: { borderColor: '#B9D8BF', backgroundColor: '#F2F9F3' },
+  financeExpenseCard: { borderColor: '#EAA0A0', backgroundColor: '#FFF2F1' },
+  financeSummaryLabel: { color: '#8B6252', fontSize: 7, fontWeight: '900', letterSpacing: 0.6 },
+  financeIncomeValue: { color: '#55795E', fontSize: 19, fontWeight: '900' },
+  financeExpenseValue: { color: '#B84D5C', fontSize: 19, fontWeight: '900' },
+  financeBalanceCard: { minHeight: 94, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 17, marginTop: 9, borderWidth: 1, borderColor: '#DCCBC3', borderRadius: 17, backgroundColor: '#FFFBFA' },
+  financeBalanceNegative: { borderColor: '#EAA0A0', backgroundColor: '#FFF8F7' },
+  financeBalanceValue: { marginTop: 7, color: '#704B3D', fontSize: 25, fontWeight: '900' },
+  financeBalanceIcon: { color: '#D77F8B', fontSize: 30, fontWeight: '800' },
+  financeSectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 23, marginBottom: 3 },
+  transactionCard: { minHeight: 81, flexDirection: 'row', alignItems: 'center', padding: 13, marginTop: 9, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 16, backgroundColor: '#FFFBFA' },
+  transactionIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', marginRight: 11, borderRadius: 13 },
+  transactionIncomeIcon: { backgroundColor: '#DFEFE3' },
+  transactionExpenseIcon: { backgroundColor: '#FDE0DF' },
+  transactionIconText: { color: '#704B3D', fontSize: 19, fontWeight: '900' },
+  transactionCategory: { color: '#D77F8B', fontSize: 7, fontWeight: '900', letterSpacing: 0.45, textTransform: 'uppercase' },
+  transactionDescription: { marginTop: 3, color: '#704B3D', fontSize: 11, fontWeight: '800' },
+  transactionMeta: { marginTop: 4, color: '#A48A80', fontSize: 8 },
+  transactionIncomeAmount: { maxWidth: 105, color: '#55795E', fontSize: 10, fontWeight: '900', textAlign: 'right' },
+  transactionExpenseAmount: { maxWidth: 105, color: '#B84D5C', fontSize: 10, fontWeight: '900', textAlign: 'right' },
+  financeEmpty: { minHeight: 210, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
+  projectCostSection: { marginTop: 22, padding: 17, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 18, backgroundColor: '#FFFBFA' },
+  projectCostRow: { minHeight: 59, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F2E4E2' },
+  financeProjectCostValue: { marginLeft: 8, color: '#9A6B56', fontSize: 10, fontWeight: '900' },
   monthNavigator: { minHeight: 64, flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5, borderRadius: 15, backgroundColor: '#FFF5F4' },
   monthButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#F7DDDC' },
   monthButtonText: { color: '#9A6B56', fontSize: 30, lineHeight: 32, fontWeight: '500' },
