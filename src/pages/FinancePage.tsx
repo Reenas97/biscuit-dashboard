@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { FaArrowDown, FaArrowTrendDown, FaArrowTrendUp, FaArrowUp, FaCoins, FaPen, FaPlus, FaTrash, FaXmark } from 'react-icons/fa6'
 import { ConfirmButton } from '../components/ConfirmButton'
+import { Pagination } from '../components/Pagination'
+import { pageItems } from '../lib/pagination'
 import { saveLocalData } from '../lib/cloudData'
 import { useAtelierSettings } from '../settings'
 
@@ -46,6 +48,7 @@ export function FinancePage() {
   const [selectedMonth, setSelectedMonth] = useState(() => { const today = new Date(); return new Date(today.getFullYear(), today.getMonth(), 1) })
   const [form, setForm] = useState<TransactionForm | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [costPage, setCostPage] = useState(1)
 
   const currentMonthKey = monthKey(selectedMonth)
   const monthlyTransactions = useMemo(() => transactions.filter((item) => item.date.startsWith(currentMonthKey)).sort((first, second) => second.date.localeCompare(first.date)), [currentMonthKey, transactions])
@@ -109,7 +112,7 @@ export function FinancePage() {
         })}</div> : <div className="finance-empty"><FaCoins /><h3>Nenhum lançamento neste mês</h3><p>Use “Novo lançamento” para registrar uma receita ou despesa.</p></div>}
       </section>
 
-      <aside className="finance-panel project-costs"><span className="section-kicker">CUSTOS DAS PEÇAS</span><h3>Custos por projeto</h3><p>Materiais utilizados e horas trabalhadas, calculados automaticamente.</p>{projectCosts.length ? <div>{projectCosts.map(({ project, seconds, materials, total }) => <article key={project.id}><div><strong>{project.title}</strong><small>{duration(seconds)} · materiais {currency(materials)}</small></div><b>{currency(total)}</b></article>)}</div> : <div className="finance-empty compact"><p>Os custos aparecerão quando houver materiais ou tempo nos projetos.</p></div>}</aside>
+      <aside className="finance-panel project-costs"><span className="section-kicker">CUSTOS DAS PEÇAS</span><h3>Custos por projeto</h3><p>Materiais utilizados e horas trabalhadas, calculados automaticamente.</p>{projectCosts.length ? <><div>{pageItems(projectCosts, costPage, 5).map(({ project, seconds, materials, total }) => <article key={project.id}><div><strong>{project.title}</strong><small>{duration(seconds)} · materiais {currency(materials)}</small></div><b>{currency(total)}</b></article>)}</div><Pagination page={costPage} pageSize={5} totalItems={projectCosts.length} onPageChange={setCostPage} /></> : <div className="finance-empty compact"><p>Os custos aparecerão quando houver materiais ou tempo nos projetos.</p></div>}</aside>
     </div>
 
     {form && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeForm() }}><section className="idea-modal finance-modal" role="dialog" aria-modal="true" aria-labelledby="finance-form-title"><div className="modal-heading"><div><span className="section-kicker"><FaCoins /> {editingId ? 'EDITAR LANÇAMENTO' : 'NOVO LANÇAMENTO'}</span><h2 id="finance-form-title">{editingId ? 'Atualizar movimentação' : 'Registrar movimentação'}</h2></div><button onClick={closeForm} type="button" aria-label="Fechar formulário"><FaXmark /></button></div><form onSubmit={handleSubmit}>

@@ -5,6 +5,8 @@ import { GiCat } from 'react-icons/gi'
 import { useAtelierSettings } from '../settings'
 import { dataChangedEvent, saveLocalData } from '../lib/cloudData'
 import { sendTimerHeartbeat, stopTimerHeartbeat } from '../lib/timerHeartbeat'
+import { Pagination } from '../components/Pagination'
+import { pageItems } from '../lib/pagination'
 
 type StoredIdea = { id: string }
 type StoredProject = { id: string; title: string; deadline: string; status: string; type: string; client?: string }
@@ -62,10 +64,14 @@ export function DashboardPage() {
   const [timeEntries, setTimeEntries] = useState(() => readStorage<TimeEntry>(timeStorageKey))
   const [selectedProjectId, setSelectedProjectId] = useState('')
   const [timerPermissionMessage, setTimerPermissionMessage] = useState('')
+  const [taskPage, setTaskPage] = useState(1)
   const [now, setNow] = useState(() => Date.now())
   const today = dateKey(new Date())
   const activeProjects = projects.filter((project) => project.status !== 'Stand by' && project.status !== 'Pronto' && project.status !== 'Entregue')
-  const timerProjects = projects.filter((project) => project.status !== 'Stand by' && project.status !== 'Pronto' && project.status !== 'Entregue')
+  const timerProjects = projects.filter((project) => project.status !== 'Stand by' && project.status !== 'Pronto' && project.status !== 'Entregue').sort((first, second) => {
+    const lastWorked = (projectId: string) => timeEntries.filter((entry) => entry.projectId === projectId).reduce((latest, entry) => Math.max(latest, new Date(entry.startedAt).getTime()), 0)
+    return lastWorked(second.id) - lastWorked(first.id)
+  })
   const datedProjects = activeProjects.filter((project) => project.deadline).sort((a, b) => a.deadline.localeCompare(b.deadline))
   const overdueProjects = datedProjects.filter((project) => project.deadline < today)
   const nextProject = datedProjects.find((project) => project.deadline >= today) ?? overdueProjects[0]
@@ -158,7 +164,7 @@ export function DashboardPage() {
         {nextProject ? <div className={nextProject.deadline < today ? 'dashboard-next-project overdue' : 'dashboard-next-project'}><div className="next-project-icon"><FaCalendarDays /></div><div><span>{nextProject.deadline < today ? 'PRAZO ATRASADO' : nextProject.type}</span><h3>{nextProject.title}</h3><p>{new Date(`${nextProject.deadline}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}{nextProject.client ? ` · ${nextProject.client}` : ''}</p></div><Link to="/projetos">Abrir <FaArrowRight /></Link></div> : <div className="dashboard-inline-empty"><FaPaw /><span><strong>Nenhuma entrega agendada</strong><small>Crie um projeto com prazo para acompanhar aqui.</small></span></div>}
 
         <div className="dashboard-lists">
-          <div><div className="dashboard-mini-heading"><span><FaClipboardCheck /> Próximas tarefas</span><Link to="/planejamento">Planejamento</Link></div>{pendingTasks.length ? <div className="dashboard-task-list">{pendingTasks.slice(0, 4).map((task) => <div key={task.id}><span className={`dashboard-priority priority-${task.priority.toLocaleLowerCase('pt-BR')}`} /><strong>{task.title}</strong><time>{task.date ? `${new Date(`${task.date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}${task.endDate && task.endDate !== task.date ? ` – ${new Date(`${task.endDate}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}` : ''}` : 'Sem data'}</time></div>)}</div> : <p className="dashboard-muted">Nenhuma tarefa pendente.</p>}</div>
+          <div><div className="dashboard-mini-heading"><span><FaClipboardCheck /> Próximas tarefas</span><Link to="/planejamento">Planejamento</Link></div>{pendingTasks.length ? <><div className="dashboard-task-list">{pageItems(pendingTasks, taskPage, 5).map((task) => <div key={task.id}><span className={`dashboard-priority priority-${task.priority.toLocaleLowerCase('pt-BR')}`} /><strong>{task.title}</strong><time>{task.date ? `${new Date(`${task.date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}${task.endDate && task.endDate !== task.date ? ` – ${new Date(`${task.endDate}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}` : ''}` : 'Sem data'}</time></div>)}</div><Pagination page={taskPage} pageSize={5} totalItems={pendingTasks.length} onPageChange={setTaskPage} /></> : <p className="dashboard-muted">Nenhuma tarefa pendente.</p>}</div>
           <div><div className="dashboard-mini-heading"><span><FaBoxesStacked /> Estoque</span><Link to="/materiais">Materiais</Link></div>{lowStock.length ? <div className="dashboard-stock-list">{lowStock.slice(0, 4).map((material) => <div key={material.id}><FaTriangleExclamation /><span><strong>{material.name}</strong><small>{material.stock.toLocaleString('pt-BR')} {material.unit} disponíveis</small></span></div>)}</div> : <p className="dashboard-muted">Nenhum material com estoque baixo.</p>}</div>
         </div>
       </section>

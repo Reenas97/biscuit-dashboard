@@ -284,6 +284,23 @@ function displayGoalValue(value: number, unit: string) {
   return unit === 'R$' ? formatCurrency(value) : `${value.toLocaleString('pt-BR')} ${unit}`.trim()
 }
 
+function pageItems<T>(items: T[], page: number, pageSize: number) {
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize))
+  const safePage = Math.min(Math.max(page, 1), totalPages)
+  return items.slice((safePage - 1) * pageSize, safePage * pageSize)
+}
+
+function MobilePagination({ page, pageSize, totalItems, onPageChange }: { page: number; pageSize: number; totalItems: number; onPageChange: (page: number) => void }) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
+  if (totalPages <= 1) return null
+  const safePage = Math.min(Math.max(page, 1), totalPages)
+  return <View style={styles.pagination}>
+    <Pressable disabled={safePage === 1} onPress={() => onPageChange(safePage - 1)} style={[styles.paginationButton, safePage === 1 && styles.paginationButtonDisabled]}><Text style={styles.paginationButtonText}>‹ Anterior</Text></Pressable>
+    <Text style={styles.paginationLabel}>{safePage} de {totalPages}</Text>
+    <Pressable disabled={safePage === totalPages} onPress={() => onPageChange(safePage + 1)} style={[styles.paginationButton, safePage === totalPages && styles.paginationButtonDisabled]}><Text style={styles.paginationButtonText}>Próxima ›</Text></Pressable>
+  </View>
+}
+
 function useUserCollection<T extends { id: string }>(userId: string, name: string) {
   const [items, setItems] = useState<T[]>([])
   const [ready, setReady] = useState(false)
@@ -330,6 +347,14 @@ export function MobileDashboard({ user }: { user: User }) {
   const [transactionForm, setTransactionForm] = useState<TransactionForm | null>(null)
   const [transactionFormError, setTransactionFormError] = useState('')
   const [savingTransaction, setSavingTransaction] = useState(false)
+  const [homeTaskPage, setHomeTaskPage] = useState(1)
+  const [homeProductionPage, setHomeProductionPage] = useState(1)
+  const [planningTaskPage, setPlanningTaskPage] = useState(1)
+  const [clientPage, setClientPage] = useState(1)
+  const [materialPage, setMaterialPage] = useState(1)
+  const [ideaPage, setIdeaPage] = useState(1)
+  const [goalPage, setGoalPage] = useState(1)
+  const [financeCostPage, setFinanceCostPage] = useState(1)
   const [now, setNow] = useState(() => Date.now())
   const [activePage, setActivePage] = useState<MobilePage>('home')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -434,7 +459,10 @@ export function MobileDashboard({ user }: { user: User }) {
     : 0
   const ownerFirstName = settings.ownerName?.trim().split(/\s+/)[0] || 'Renata'
   const loading = !projectsReady || !tasksReady || !timeReady || !unavailableReady || !clientsReady || !materialsReady || !ideasReady || !goalsReady || !transactionsReady
-  const timerProjects = summary.activeProjects
+  const timerProjects = [...summary.activeProjects].sort((first, second) => {
+    const lastWorked = (projectId: string) => timeEntries.filter((entry) => entry.projectId === projectId).reduce((latest, entry) => Math.max(latest, new Date(entry.startedAt).getTime()), 0)
+    return lastWorked(second.id) - lastWorked(first.id)
+  })
   const selectedProject = timerProjects.find((project) => project.id === selectedProjectId)
   const selectedProjectDetails = projects.find((project) => project.id === selectedProjectDetailsId) ?? null
   const selectedProjectTimeEntries = selectedProjectDetails
@@ -454,7 +482,9 @@ export function MobileDashboard({ user }: { user: User }) {
     .filter((task) => task.date <= planningMonthEnd && (task.endDate || task.date) >= planningMonthStart)
     .sort((first, second) => first.date.localeCompare(second.date)), [planningMonthEnd, planningMonthStart, tasks])
   const planningPendingTasks = planningMonthTasks.filter((task) => !task.completed)
-  const planningCompletedTasks = planningMonthTasks.filter((task) => task.completed)
+  const pagedPlanningTasks = pageItems(planningMonthTasks, planningTaskPage, 10)
+  const pagedPlanningPendingTasks = pagedPlanningTasks.filter((task) => !task.completed)
+  const pagedPlanningCompletedTasks = pagedPlanningTasks.filter((task) => task.completed)
   const planningMonthLabel = planningMonth
     .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
     .replace(/^./, (letter) => letter.toLocaleUpperCase('pt-BR'))
@@ -1070,10 +1100,11 @@ export function MobileDashboard({ user }: { user: User }) {
     setTimerBusy(true)
     setActionMessage('')
     const nowIso = new Date().toISOString()
-    const entryId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    const entryReference = doc(collection(db, 'users', user.uid, 'timeEntries'))
+    const entryId = entryReference.id
     try {
       const batch = writeBatch(db)
-      batch.set(doc(db, 'users', user.uid, 'timeEntries', entryId), {
+      batch.set(entryReference, {
         id: entryId,
         projectId: selectedProject.id,
         startedAt: nowIso,
@@ -1578,7 +1609,7 @@ export function MobileDashboard({ user }: { user: User }) {
               </View>
               <Text style={styles.countBadge}>{summary.pendingTasks.length}</Text>
             </View>
-            {summary.pendingTasks.length ? summary.pendingTasks.slice(0, 5).map((task) => {
+            {summary.pendingTasks.length ? pageItems(summary.pendingTasks, homeTaskPage, 5).map((task) => {
               const isLate = (task.endDate || task.date) < summary.today
                 && !inactiveStatuses.has(projects.find((project) => project.id === task.projectId)?.status ?? '')
               const linkedProject = projects.find((project) => project.id === task.projectId)
@@ -1595,6 +1626,7 @@ export function MobileDashboard({ user }: { user: User }) {
                 </View>
               )
             }) : <Text style={styles.emptyText}>Tudo em dia por aqui ✨</Text>}
+            <MobilePagination page={homeTaskPage} pageSize={5} totalItems={summary.pendingTasks.length} onPageChange={setHomeTaskPage} />
           </View>
 
           <View style={styles.sectionCard}>
@@ -1605,7 +1637,7 @@ export function MobileDashboard({ user }: { user: User }) {
               </View>
               <Text style={styles.countBadge}>{summary.activeProjects.length}</Text>
             </View>
-            {summary.activeProjects.length ? summary.activeProjects.slice(0, 5).map((project) => (
+            {summary.activeProjects.length ? pageItems(summary.activeProjects, homeProductionPage, 5).map((project) => (
               <View key={project.id} style={styles.projectRow}>
                 <View style={styles.projectIcon}><Text style={styles.projectIconText}>R</Text></View>
                 <View style={styles.rowBody}>
@@ -1614,6 +1646,7 @@ export function MobileDashboard({ user }: { user: User }) {
                 </View>
               </View>
             )) : <Text style={styles.emptyText}>Nenhum projeto ativo no momento.</Text>}
+            <MobilePagination page={homeProductionPage} pageSize={5} totalItems={summary.activeProjects.length} onPageChange={setHomeProductionPage} />
           </View>
         </>
       ) : activePage === 'projects' ? (
@@ -1638,12 +1671,12 @@ export function MobileDashboard({ user }: { user: User }) {
       ) : activePage === 'planning' ? (
         <View style={styles.sectionCard}>
           <View style={styles.monthNavigator}>
-            <Pressable accessibilityLabel="Mês anterior" onPress={() => setPlanningMonth(new Date(planningMonth.getFullYear(), planningMonth.getMonth() - 1, 1))} style={styles.monthButton}><Text style={styles.monthButtonText}>‹</Text></Pressable>
-            <Pressable onPress={() => { const today = new Date(); setPlanningMonth(new Date(today.getFullYear(), today.getMonth(), 1)) }} style={styles.monthLabelButton}>
+            <Pressable accessibilityLabel="Mês anterior" onPress={() => { setPlanningMonth(new Date(planningMonth.getFullYear(), planningMonth.getMonth() - 1, 1)); setPlanningTaskPage(1) }} style={styles.monthButton}><Text style={styles.monthButtonText}>‹</Text></Pressable>
+            <Pressable onPress={() => { const today = new Date(); setPlanningMonth(new Date(today.getFullYear(), today.getMonth(), 1)); setPlanningTaskPage(1) }} style={styles.monthLabelButton}>
               <Text style={styles.monthLabel}>{planningMonthLabel}</Text>
               <Text style={styles.monthTodayHint}>TOQUE PARA VOLTAR AO MÊS ATUAL</Text>
             </Pressable>
-            <Pressable accessibilityLabel="Próximo mês" onPress={() => setPlanningMonth(new Date(planningMonth.getFullYear(), planningMonth.getMonth() + 1, 1))} style={styles.monthButton}><Text style={styles.monthButtonText}>›</Text></Pressable>
+            <Pressable accessibilityLabel="Próximo mês" onPress={() => { setPlanningMonth(new Date(planningMonth.getFullYear(), planningMonth.getMonth() + 1, 1)); setPlanningTaskPage(1) }} style={styles.monthButton}><Text style={styles.monthButtonText}>›</Text></Pressable>
           </View>
           <View style={styles.calendarWeekdays}>{['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'].map((day) => <Text key={day} style={styles.calendarWeekday}>{day}</Text>)}</View>
           <View style={styles.calendarGrid}>{planningCalendarDays.map((day) => {
@@ -1670,7 +1703,7 @@ export function MobileDashboard({ user }: { user: User }) {
             <View><Text style={styles.sectionKicker}>TAREFAS DO MÊS</Text><Text style={styles.sectionTitle}>Lista do ateliê</Text></View>
             <View style={styles.planningHeadingActions}><Text style={styles.countBadge}>{planningPendingTasks.length}</Text><Pressable accessibilityLabel="Adicionar dia indisponível" onPress={() => openUnavailableForm()} style={styles.blockDayHeadingButton}><Text style={styles.blockDayHeadingText}>×</Text></Pressable><Pressable accessibilityLabel="Adicionar tarefa" onPress={() => openNewTask()} style={styles.addTaskButton}><Text style={styles.addTaskButtonText}>＋</Text></Pressable></View>
           </View>
-          {planningPendingTasks.length ? planningPendingTasks.map((task) => {
+          {pagedPlanningPendingTasks.length ? pagedPlanningPendingTasks.map((task) => {
             const linkedProject = projects.find((project) => project.id === task.projectId)
             const isLate = (task.endDate || task.date) < summary.today && !inactiveStatuses.has(linkedProject?.status ?? '')
             return <View key={task.id} style={styles.taskRowLarge}>
@@ -1684,11 +1717,11 @@ export function MobileDashboard({ user }: { user: User }) {
               <Pressable accessibilityLabel={`Editar ${task.title}`} onPress={() => openEditTask(task)} style={styles.editTaskButton}><Text style={styles.editGlyph}>✎</Text></Pressable>
               {isLate ? <Text style={styles.lateText}>ATRASADA</Text> : <Text style={styles.priorityText}>{task.priority}</Text>}
             </View>
-          }) : <Text style={styles.emptyText}>Nenhuma tarefa pendente neste mês ✨</Text>}
+          }) : planningPendingTasks.length ? null : <Text style={styles.emptyText}>Nenhuma tarefa pendente neste mês ✨</Text>}
 
-          {planningCompletedTasks.length ? <View style={styles.completedSection}>
+          {pagedPlanningCompletedTasks.length ? <View style={styles.completedSection}>
             <Text style={styles.completedTitle}>CONCLUÍDAS NESTE MÊS</Text>
-            {planningCompletedTasks.map((task) => (
+            {pagedPlanningCompletedTasks.map((task) => (
               <View key={task.id} style={styles.completedRow}>
                 <Pressable accessibilityLabel={`Reabrir ${task.title}`} disabled={updatingTaskId === task.id} onPress={() => toggleTask(task)} style={[styles.taskCheck, styles.taskCheckCompleted]}>
                   {updatingTaskId === task.id ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.taskCheckCompletedText}>✓</Text>}
@@ -1697,15 +1730,16 @@ export function MobileDashboard({ user }: { user: User }) {
               </View>
             ))}
           </View> : null}
+          <MobilePagination page={planningTaskPage} pageSize={10} totalItems={planningMonthTasks.length} onPageChange={setPlanningTaskPage} />
         </View>
       ) : activePage === 'clients' ? (
         <View>
           <View style={styles.clientsToolbar}>
-            <TextInput autoCapitalize="none" onChangeText={setClientQuery} placeholder="Buscar por nome ou contato" placeholderTextColor="#B69B91" style={styles.clientSearchInput} value={clientQuery} />
+            <TextInput autoCapitalize="none" onChangeText={(value) => { setClientQuery(value); setClientPage(1) }} placeholder="Buscar por nome ou contato" placeholderTextColor="#B69B91" style={styles.clientSearchInput} value={clientQuery} />
             <Pressable accessibilityLabel="Cadastrar cliente" onPress={openNewClient} style={styles.newClientButton}><Text style={styles.newClientButtonText}>＋</Text></Pressable>
           </View>
           <Text style={styles.clientCount}>{filteredClients.length} {filteredClients.length === 1 ? 'cliente' : 'clientes'}</Text>
-          {filteredClients.length ? filteredClients.map((client) => {
+          {filteredClients.length ? pageItems(filteredClients, clientPage, 10).map((client) => {
             const orders = projects.filter((project) => project.client?.trim().toLocaleLowerCase('pt-BR') === client.name.trim().toLocaleLowerCase('pt-BR')).length
             return <Pressable key={client.id} onPress={() => openEditClient(client)} style={({ pressed }) => [styles.clientCard, pressed && styles.projectRowPressed]}>
               <View style={styles.clientAvatar}><Text style={styles.clientAvatarText}>{client.name.trim().charAt(0).toLocaleUpperCase('pt-BR') || '♡'}</Text></View>
@@ -1718,6 +1752,7 @@ export function MobileDashboard({ user }: { user: User }) {
               <Text style={styles.editGlyph}>✎</Text>
             </Pressable>
           }) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>♡</Text><Text style={styles.sectionTitle}>{clientQuery ? 'Nenhuma cliente encontrada' : 'Nenhuma cliente cadastrada'}</Text><Text style={styles.emptyText}>{clientQuery ? 'Tente buscar por outro nome ou contato.' : 'Toque no botão + para cadastrar a primeira cliente.'}</Text></View>}
+          <MobilePagination page={clientPage} pageSize={10} totalItems={filteredClients.length} onPageChange={setClientPage} />
         </View>
       ) : activePage === 'materials' ? (
         <View>
@@ -1727,10 +1762,10 @@ export function MobileDashboard({ user }: { user: User }) {
             <View style={styles.materialSummaryCard}><Text numberOfLines={1} adjustsFontSizeToFit style={styles.materialSummaryMoney}>{totalStockValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Text><Text style={styles.materialSummaryLabel}>Valor total</Text></View>
           </View>
           <View style={styles.clientsToolbar}>
-            <TextInput autoCapitalize="none" onChangeText={setMaterialQuery} placeholder="Buscar material ou categoria" placeholderTextColor="#B69B91" style={styles.clientSearchInput} value={materialQuery} />
+            <TextInput autoCapitalize="none" onChangeText={(value) => { setMaterialQuery(value); setMaterialPage(1) }} placeholder="Buscar material ou categoria" placeholderTextColor="#B69B91" style={styles.clientSearchInput} value={materialQuery} />
             <Pressable accessibilityLabel="Cadastrar material" onPress={openNewMaterial} style={styles.newClientButton}><Text style={styles.newClientButtonText}>＋</Text></Pressable>
           </View>
-          {filteredMaterials.length ? filteredMaterials.map((material) => {
+          {filteredMaterials.length ? pageItems(filteredMaterials, materialPage, 10).map((material) => {
             const isLow = material.stock <= material.minimumStock
             return <Pressable key={material.id} onPress={() => openEditMaterial(material)} style={({ pressed }) => [styles.materialCard, isLow && styles.materialCardLow, pressed && styles.projectRowPressed]}>
               <View style={[styles.materialIcon, isLow && styles.materialIconLow]}><Text style={styles.materialIconText}>□</Text></View>
@@ -1742,16 +1777,17 @@ export function MobileDashboard({ user }: { user: User }) {
               {isLow ? <Text style={styles.lowStockBadge}>BAIXO</Text> : <Text style={styles.editGlyph}>✎</Text>}
             </Pressable>
           }) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>□</Text><Text style={styles.sectionTitle}>{materialQuery ? 'Nenhum material encontrado' : 'Nenhum material cadastrado'}</Text><Text style={styles.emptyText}>{materialQuery ? 'Tente buscar por outro nome ou categoria.' : 'Toque no botão + para cadastrar o primeiro material.'}</Text></View>}
+          <MobilePagination page={materialPage} pageSize={10} totalItems={filteredMaterials.length} onPageChange={setMaterialPage} />
         </View>
       ) : activePage === 'ideas' ? (
         <View>
           <View style={styles.ideasFilterRow}>
-            <TextInput autoCapitalize="none" onChangeText={setIdeaQuery} placeholder="Pesquisar ideias..." placeholderTextColor="#B69B91" style={styles.clientSearchInput} value={ideaQuery} />
+            <TextInput autoCapitalize="none" onChangeText={(value) => { setIdeaQuery(value); setIdeaPage(1) }} placeholder="Pesquisar ideias..." placeholderTextColor="#B69B91" style={styles.clientSearchInput} value={ideaQuery} />
             <Pressable accessibilityLabel="Cadastrar ideia" onPress={openNewIdea} style={styles.newClientButton}><Text style={styles.newClientButtonText}>＋</Text></Pressable>
           </View>
-          <Pressable onPress={() => setShowFavoriteIdeas((current) => !current)} style={[styles.favoriteFilter, showFavoriteIdeas && styles.favoriteFilterActive]}><Text style={[styles.favoriteFilterText, showFavoriteIdeas && styles.favoriteFilterTextActive]}>♥ {showFavoriteIdeas ? 'Mostrando favoritas' : 'Mostrar somente favoritas'}</Text></Pressable>
+          <Pressable onPress={() => { setShowFavoriteIdeas((current) => !current); setIdeaPage(1) }} style={[styles.favoriteFilter, showFavoriteIdeas && styles.favoriteFilterActive]}><Text style={[styles.favoriteFilterText, showFavoriteIdeas && styles.favoriteFilterTextActive]}>♥ {showFavoriteIdeas ? 'Mostrando favoritas' : 'Mostrar somente favoritas'}</Text></Pressable>
           <Text style={styles.clientCount}>{filteredIdeas.length} {filteredIdeas.length === 1 ? 'ideia' : 'ideias'}</Text>
-          {filteredIdeas.length ? filteredIdeas.map((idea) => <View key={idea.id} style={[styles.ideaCard, idea.tone === 'brown' && styles.ideaCardBrown, idea.tone === 'blush' && styles.ideaCardBlush]}>
+          {filteredIdeas.length ? pageItems(filteredIdeas, ideaPage, 10).map((idea) => <View key={idea.id} style={[styles.ideaCard, idea.tone === 'brown' && styles.ideaCardBrown, idea.tone === 'blush' && styles.ideaCardBlush]}>
             <View style={styles.ideaHeading}>
               <View style={styles.rowBody}><Text style={styles.materialCategory}>{idea.category || 'Sem categoria'}</Text><Text style={styles.ideaTitle}>{idea.title}</Text></View>
               <Pressable accessibilityLabel={`${idea.favorite ? 'Desfavoritar' : 'Favoritar'} ${idea.title}`} disabled={updatingFavoriteId === idea.id} onPress={() => toggleIdeaFavorite(idea)} style={[styles.favoriteButton, idea.favorite && styles.favoriteButtonActive]}>{updatingFavoriteId === idea.id ? <ActivityIndicator color="#D77F8B" size="small" /> : <Text style={[styles.favoriteButtonText, idea.favorite && styles.favoriteButtonTextActive]}>♥</Text>}</Pressable>
@@ -1765,6 +1801,7 @@ export function MobileDashboard({ user }: { user: User }) {
               <Pressable accessibilityLabel={`Editar ${idea.title}`} onPress={() => openEditIdea(idea)} style={styles.editTaskButton}><Text style={styles.editGlyph}>✎</Text></Pressable>
             </View>
           </View>) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>✦</Text><Text style={styles.sectionTitle}>Nenhuma ideia encontrada</Text><Text style={styles.emptyText}>Mude a busca ou toque em + para guardar uma inspiração.</Text></View>}
+          <MobilePagination page={ideaPage} pageSize={10} totalItems={filteredIdeas.length} onPageChange={setIdeaPage} />
         </View>
       ) : activePage === 'settings' ? (
         <View>
@@ -1804,7 +1841,7 @@ export function MobileDashboard({ user }: { user: User }) {
             <Text style={styles.goalCount}>{goals.length ? 'Toque em uma meta para atualizar o progresso.' : 'Crie seu primeiro objetivo para o ateliê.'}</Text>
             <Pressable accessibilityLabel="Cadastrar meta" onPress={openNewGoal} style={styles.newClientButton}><Text style={styles.newClientButtonText}>＋</Text></Pressable>
           </View>
-          {goals.length ? goals.map((goal) => {
+          {goals.length ? pageItems(goals, goalPage, 10).map((goal) => {
             const progress = goal.target > 0 ? Math.min(100, Math.round((goal.current / goal.target) * 100)) : 0
             const isComplete = goal.current >= goal.target
             const isOverdue = !isComplete && Boolean(goal.deadline) && (goal.deadline || '') < summary.today
@@ -1818,6 +1855,7 @@ export function MobileDashboard({ user }: { user: User }) {
               <View style={styles.goalFooter}><Text style={styles.goalDeadline}>{goal.deadline ? `Prazo: ${formatShortDate(goal.deadline)}` : 'Sem prazo definido'}</Text><Text style={styles.goalEditHint}>Editar progresso ›</Text></View>
             </Pressable>
           }) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>◎</Text><Text style={styles.sectionTitle}>Nenhuma meta criada</Text><Text style={styles.emptyText}>Toque no botão + para começar a acompanhar um objetivo.</Text></View>}
+          <MobilePagination page={goalPage} pageSize={10} totalItems={goals.length} onPageChange={setGoalPage} />
         </View>
       ) : (
         <View>
@@ -1842,7 +1880,8 @@ export function MobileDashboard({ user }: { user: User }) {
           }) : <View style={styles.financeEmpty}><Text style={styles.dayEmptyIcon}>R$</Text><Text style={styles.sectionTitle}>Nenhum lançamento neste mês</Text><Text style={styles.emptyText}>Toque no botão + para registrar uma receita ou despesa.</Text></View>}
           <View style={styles.projectCostSection}>
             <Text style={styles.sectionKicker}>CUSTOS DAS PEÇAS</Text><Text style={styles.sectionTitle}>Custos acumulados por projeto</Text><Text style={styles.sectionText}>Materiais utilizados e horas trabalhadas calculados automaticamente.</Text>
-            {projectCosts.length ? projectCosts.slice(0, 6).map(({ project, seconds, materialCost, laborCost }) => <View key={project.id} style={styles.projectCostRow}><View style={styles.rowBody}><Text style={styles.rowTitle}>{project.title}</Text><Text style={styles.rowMeta}>{formatDuration(seconds)} · materiais {formatCurrency(materialCost)}</Text></View><Text style={styles.financeProjectCostValue}>{formatCurrency(materialCost + laborCost)}</Text></View>) : <Text style={styles.projectEmptyText}>Os custos aparecerão quando houver materiais ou tempo lançados nos projetos.</Text>}
+            {projectCosts.length ? pageItems(projectCosts, financeCostPage, 5).map(({ project, seconds, materialCost, laborCost }) => <View key={project.id} style={styles.projectCostRow}><View style={styles.rowBody}><Text style={styles.rowTitle}>{project.title}</Text><Text style={styles.rowMeta}>{formatDuration(seconds)} · materiais {formatCurrency(materialCost)}</Text></View><Text style={styles.financeProjectCostValue}>{formatCurrency(materialCost + laborCost)}</Text></View>) : <Text style={styles.projectEmptyText}>Os custos aparecerão quando houver materiais ou tempo lançados nos projetos.</Text>}
+            <MobilePagination page={financeCostPage} pageSize={5} totalItems={projectCosts.length} onPageChange={setFinanceCostPage} />
           </View>
         </View>
       )}
@@ -2217,6 +2256,11 @@ const styles = StyleSheet.create({
   warningText: { color: '#B84D5C' },
   countBadge: { minWidth: 25, paddingHorizontal: 7, paddingVertical: 5, overflow: 'hidden', borderRadius: 13, backgroundColor: '#F7DDDC', color: '#8B6252', fontSize: 9, fontWeight: '900', textAlign: 'center' },
   emptyText: { marginTop: 14, color: '#A48A80', fontSize: 11 },
+  pagination: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 16 },
+  paginationButton: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 11, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 10, backgroundColor: '#FFF8F7' },
+  paginationButtonDisabled: { opacity: 0.38 },
+  paginationButtonText: { color: '#8B6252', fontSize: 8, fontWeight: '900' },
+  paginationLabel: { color: '#9A7D72', fontSize: 8, fontWeight: '800' },
   bottomNavigation: { flexDirection: 'row', marginHorizontal: 12, marginTop: 6, marginBottom: 8, padding: 6, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 18, backgroundColor: '#FFFBFA', shadowColor: '#704B3D', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.08, shadowRadius: 9, elevation: 8 },
   navItem: { flex: 1, minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 13 },
   navItemActive: { backgroundColor: '#F8E3E2' },

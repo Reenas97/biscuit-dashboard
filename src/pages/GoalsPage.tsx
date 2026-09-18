@@ -3,6 +3,8 @@ import type { FormEvent } from 'react'
 import { FaBullseye, FaCheck, FaPen, FaPlus, FaTrash, FaXmark } from 'react-icons/fa6'
 import { ConfirmButton } from '../components/ConfirmButton'
 import { saveLocalData } from '../lib/cloudData'
+import { Pagination } from '../components/Pagination'
+import { pageItems } from '../lib/pagination'
 
 type GoalType = 'Faturamento' | 'Encomendas' | 'Produção' | 'Personalizada'
 type Goal = { id: string; title: string; type: GoalType; target: number; current: number; unit: string; deadline: string; createdAt: string }
@@ -33,6 +35,7 @@ export function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>(loadGoals)
   const [form, setForm] = useState<GoalForm | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
   const completed = useMemo(() => goals.filter((goal) => goal.current >= goal.target), [goals])
 
   function saveGoals(nextGoals: Goal[]) { setGoals(nextGoals); saveLocalData(storageKey, JSON.stringify(nextGoals)) }
@@ -56,7 +59,7 @@ export function GoalsPage() {
 
     <div className="goals-summary mt-7"><article><span>Metas cadastradas</span><strong>{goals.length}</strong></article><article><span>Em andamento</span><strong>{goals.length - completed.length}</strong></article><article><span>Concluídas</span><strong>{completed.length}</strong></article></div>
 
-    {goals.length > 0 ? <div className="goals-grid mt-6">{goals.map((goal) => {
+    {goals.length > 0 ? <><div className="goals-grid mt-6">{pageItems(goals, page, 10).map((goal) => {
       const percentage = goal.target > 0 ? Math.min(100, Math.round((goal.current / goal.target) * 100)) : 0
       const isComplete = goal.current >= goal.target
       return <article className={isComplete ? 'goal-card completed' : 'goal-card'} key={goal.id}>
@@ -67,7 +70,7 @@ export function GoalsPage() {
         <div className="goal-deadline"><span>Prazo</span><strong>{goal.deadline ? new Date(`${goal.deadline}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : 'Sem prazo definido'}</strong></div>
         <div className="goal-actions"><button onClick={() => openEdit(goal)} type="button"><FaPen /> Atualizar</button><ConfirmButton title="Excluir meta?" message={`A meta “${goal.title}” e seu progresso serão removidos.`} ariaLabel={`Excluir ${goal.title}`} onConfirm={() => saveGoals(goals.filter((item) => item.id !== goal.id))}><FaTrash /></ConfirmButton></div>
       </article>
-    })}</div> : <div className="ideas-empty mt-7"><FaBullseye /><h3>Nenhuma meta cadastrada</h3><p>Crie uma meta de faturamento, encomendas ou produção para acompanhar seu crescimento.</p></div>}
+    })}</div><Pagination page={page} pageSize={10} totalItems={goals.length} onPageChange={setPage} /></> : <div className="ideas-empty mt-7"><FaBullseye /><h3>Nenhuma meta cadastrada</h3><p>Crie uma meta de faturamento, encomendas ou produção para acompanhar seu crescimento.</p></div>}
 
     {form && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeForm() }}><section className="idea-modal" role="dialog" aria-modal="true" aria-labelledby="goal-form-title"><div className="modal-heading"><div><span className="section-kicker"><FaBullseye /> {editingId ? 'ATUALIZAR META' : 'NOVA META'}</span><h2 id="goal-form-title">{editingId ? 'Atualizar progresso' : 'Criar uma meta'}</h2></div><button onClick={closeForm} type="button" aria-label="Fechar formulário"><FaXmark /></button></div><form onSubmit={handleSubmit}>
       <label className="form-field form-field--full">Nome da meta<input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Ex.: Faturar R$ 2.000 em agosto" /></label>

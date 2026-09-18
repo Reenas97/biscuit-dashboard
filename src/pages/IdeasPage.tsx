@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ConfirmButton } from '../components/ConfirmButton'
+import { Pagination } from '../components/Pagination'
+import { pageItems } from '../lib/pagination'
 import { saveLocalData } from '../lib/cloudData'
 import {
   FaArrowRight,
@@ -83,6 +85,7 @@ export function IdeasPage() {
   const [search, setSearch] = useState('')
   const [showFavorites, setShowFavorites] = useState(false)
   const [category, setCategory] = useState('Todas')
+  const [page, setPage] = useState(1)
 
   const categories = useMemo(() => ['Todas', ...new Set(ideas.map((idea) => idea.category))], [ideas])
   const selectedIdea = ideas.find((idea) => idea.id === selectedIdeaId) ?? null
@@ -204,14 +207,14 @@ export function IdeasPage() {
       <div className="ideas-toolbar mt-7 flex flex-col gap-3 2xl:flex-row 2xl:items-center">
         <label className="search-field min-w-0 flex-1">
           <FaMagnifyingGlass aria-hidden="true" />
-          <input value={search} onChange={(event) => setSearch(event.target.value)} type="search" placeholder="Pesquisar ideias..." aria-label="Pesquisar ideias" />
+          <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} type="search" placeholder="Pesquisar ideias..." aria-label="Pesquisar ideias" />
         </label>
         <div className="filter-group flex flex-wrap gap-2">
-          <button className={!showFavorites && category === 'Todas' ? 'filter-chip active' : 'filter-chip'} onClick={() => { setShowFavorites(false); setCategory('Todas') }} type="button">Todas <span>{ideas.length}</span></button>
-          <button className={showFavorites ? 'filter-chip active' : 'filter-chip'} onClick={() => setShowFavorites((current) => !current)} type="button"><FaHeart /> Favoritas</button>
+          <button className={!showFavorites && category === 'Todas' ? 'filter-chip active' : 'filter-chip'} onClick={() => { setShowFavorites(false); setCategory('Todas'); setPage(1) }} type="button">Todas <span>{ideas.length}</span></button>
+          <button className={showFavorites ? 'filter-chip active' : 'filter-chip'} onClick={() => { setShowFavorites((current) => !current); setPage(1) }} type="button"><FaHeart /> Favoritas</button>
           <label className="category-filter">
             <FaTag aria-hidden="true" />
-            <select value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Filtrar por categoria">
+            <select value={category} onChange={(event) => { setCategory(event.target.value); setPage(1) }} aria-label="Filtrar por categoria">
               {categories.map((item) => <option key={item}>{item}</option>)}
             </select>
           </label>
@@ -223,9 +226,9 @@ export function IdeasPage() {
         <span>Ordenar: mais recentes</span>
       </div>
 
-      {visibleIdeas.length > 0 ? (
+      {visibleIdeas.length > 0 ? (<>
         <div className="ideas-grid mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-          {visibleIdeas.map((idea) => (
+          {pageItems(visibleIdeas, page, 10).map((idea) => (
             <article className="idea-card" key={idea.id}>
               <div className={`idea-cover idea-cover--${idea.tone}`}>
                 <FaImage aria-hidden="true" />
@@ -247,7 +250,8 @@ export function IdeasPage() {
             </article>
           ))}
         </div>
-      ) : (
+        <Pagination page={page} pageSize={10} totalItems={visibleIdeas.length} onPageChange={setPage} />
+      </>) : (
         <div className="ideas-empty mt-4">
           <FaLightbulb />
           <h3>Nenhuma ideia encontrada</h3>

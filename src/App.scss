@@ -13,6 +13,11 @@ $line: color.mix($blush, $brown, 76%);
 
 button { color: inherit; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba($pink, .42); outline-offset: 2px; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 13px; margin-top: 18px; }
+.pagination button { min-height: 35px; padding: 0 12px; border: 1px solid $line; border-radius: 10px; background: $paper; color: $brown; font-size: 9px; font-weight: 800; cursor: pointer; }
+.pagination button:disabled { opacity: .4; cursor: default; }
+.pagination span { color: $muted; font-size: 9px; }
+.pagination strong { color: $dark-brown; }
 
 .app-shell {
   min-height: 100vh;

@@ -3,6 +3,8 @@ import type { FormEvent } from 'react'
 import { FaBoxOpen, FaBoxesStacked, FaPen, FaPlus, FaTrash, FaTriangleExclamation, FaXmark } from 'react-icons/fa6'
 import { ConfirmButton } from '../components/ConfirmButton'
 import { saveLocalData } from '../lib/cloudData'
+import { Pagination } from '../components/Pagination'
+import { pageItems } from '../lib/pagination'
 
 type Material = {
   id: string
@@ -35,6 +37,7 @@ export function MaterialsPage() {
   const [form, setForm] = useState<MaterialForm | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
+  const [page, setPage] = useState(1)
   const lowStock = useMemo(() => materials.filter((material) => material.stock <= material.minimumStock), [materials])
   const totalValue = useMemo(() => materials.reduce((sum, material) => sum + material.stock * material.unitCost, 0), [materials])
 
@@ -93,9 +96,9 @@ export function MaterialsPage() {
       </div>
       {notice && <div className="settings-message">{notice}</div>}
 
-      {materials.length > 0 ? (
+      {materials.length > 0 ? (<>
         <div className="materials-grid mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-          {materials.map((material) => {
+          {pageItems(materials, page, 10).map((material) => {
             const isLow = material.stock <= material.minimumStock
             return (
               <article className={isLow ? 'material-card low' : 'material-card'} key={material.id}>
@@ -114,7 +117,8 @@ export function MaterialsPage() {
             )
           })}
         </div>
-      ) : (
+        <Pagination page={page} pageSize={10} totalItems={materials.length} onPageChange={setPage} />
+      </>) : (
         <div className="ideas-empty mt-7"><FaBoxOpen /><h3>Nenhum material cadastrado</h3><p>Comece pelas massas, tintas e itens que você mais usa.</p></div>
       )}
 
