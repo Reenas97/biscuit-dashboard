@@ -5,6 +5,7 @@ import {
   FaCalendarDays,
   FaClipboardList,
   FaGear,
+  FaCoins,
   FaHouse,
   FaLightbulb,
   FaUsers,
@@ -22,6 +23,7 @@ const sections = [
   { icon: FaCalendarDays, label: 'Planejamento', path: '/planejamento' },
   { icon: FaBoxOpen, label: 'Materiais', path: '/materiais' },
   { icon: FaBullseye, label: 'Metas', path: '/metas' },
+  { icon: FaCoins, label: 'Financeiro', path: '/financeiro' },
   { icon: FaGear, label: 'Configurações', path: '/configuracoes' },
 ]
 

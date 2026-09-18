@@ -25,6 +25,7 @@ const collectionConfigs: CollectionConfig[] = [
   { storageKey: 'reena-biscuit-tasks', collectionName: 'tasks' },
   { storageKey: 'reena-biscuit-unavailable-days', collectionName: 'unavailableDays' },
   { storageKey: 'reena-biscuit-goals', collectionName: 'goals' },
+  { storageKey: 'reena-biscuit-transactions', collectionName: 'transactions' },
   { storageKey: 'reena-biscuit-time-entries', collectionName: 'timeEntries' },
 ]
 

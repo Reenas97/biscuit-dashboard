@@ -7,6 +7,7 @@ import { MaterialsPage } from './pages/MaterialsPage'
 import { ClientsPage } from './pages/ClientsPage'
 import { PlanningPage } from './pages/PlanningPage'
 import { GoalsPage } from './pages/GoalsPage'
+import { FinancePage } from './pages/FinancePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { LoginPage } from './pages/LoginPage'
 import { LandingPage } from './pages/LandingPage'
@@ -28,6 +29,7 @@ function App() {
         <Route path="clientes" element={<ClientsPage />} />
         <Route path="planejamento" element={<PlanningPage />} />
         <Route path="metas" element={<GoalsPage />} />
+        <Route path="financeiro" element={<FinancePage />} />
         <Route path="configuracoes" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
