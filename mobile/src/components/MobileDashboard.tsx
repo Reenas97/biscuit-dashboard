@@ -154,6 +154,26 @@ type IdeaForm = {
   link: string
 }
 
+type Goal = {
+  id: string
+  title: string
+  type: string
+  target: number
+  current: number
+  unit: string
+  deadline?: string
+}
+
+type GoalForm = {
+  id?: string
+  title: string
+  type: string
+  target: string
+  current: string
+  unit: string
+  deadline: string
+}
+
 type AtelierSettings = {
   studioName?: string
   subtitle?: string
@@ -180,7 +200,7 @@ type SettingsForm = {
   hourlyRate: string
 }
 
-type MobilePage = 'home' | 'projects' | 'planning' | 'clients' | 'materials' | 'ideas' | 'settings'
+type MobilePage = 'home' | 'projects' | 'planning' | 'clients' | 'materials' | 'ideas' | 'settings' | 'goals'
 
 const inactiveStatuses = new Set(['Stand by', 'Pronto', 'Entregue'])
 const projectStatuses = ['Planejamento', 'Stand by', 'Modelagem', 'Secagem', 'Pintura', 'Finalização', 'Envernização', 'Pronto', 'Entregue']
@@ -233,6 +253,17 @@ function formatCurrency(value: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
+function goalDefaultUnit(type: string) {
+  if (type === 'Faturamento') return 'R$'
+  if (type === 'Encomendas') return 'encomendas'
+  if (type === 'Produção') return 'peças'
+  return ''
+}
+
+function displayGoalValue(value: number, unit: string) {
+  return unit === 'R$' ? formatCurrency(value) : `${value.toLocaleString('pt-BR')} ${unit}`.trim()
+}
+
 function useUserCollection<T extends { id: string }>(userId: string, name: string) {
   const [items, setItems] = useState<T[]>([])
   const [ready, setReady] = useState(false)
@@ -259,6 +290,7 @@ export function MobileDashboard({ user }: { user: User }) {
   const { items: clients, ready: clientsReady } = useUserCollection<Client>(user.uid, 'clients')
   const { items: materials, ready: materialsReady } = useUserCollection<Material>(user.uid, 'materials')
   const { items: ideas, ready: ideasReady } = useUserCollection<Idea>(user.uid, 'ideas')
+  const { items: goals, ready: goalsReady } = useUserCollection<Goal>(user.uid, 'goals')
   const [settings, setSettings] = useState<AtelierSettings>({})
   const [settingsForm, setSettingsForm] = useState<SettingsForm>({ studioName: 'Reena Biscuit', subtitle: 'Ateliê de biscuit', ownerName: 'Renata', phone: '', instagram: '', email: '', city: '', state: '', timerPauseMinutes: 20, hourlyRate: '7,37' })
   const [savingSettings, setSavingSettings] = useState(false)
@@ -267,6 +299,9 @@ export function MobileDashboard({ user }: { user: User }) {
   const [materialUsageQuantity, setMaterialUsageQuantity] = useState('')
   const [materialUsageError, setMaterialUsageError] = useState('')
   const [materialUsageBusy, setMaterialUsageBusy] = useState(false)
+  const [goalForm, setGoalForm] = useState<GoalForm | null>(null)
+  const [goalFormError, setGoalFormError] = useState('')
+  const [savingGoal, setSavingGoal] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const [activePage, setActivePage] = useState<MobilePage>('home')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -370,7 +405,7 @@ export function MobileDashboard({ user }: { user: User }) {
     ? Math.max(0, Math.floor((now - new Date(activeEntry.startedAt).getTime()) / 1000))
     : 0
   const ownerFirstName = settings.ownerName?.trim().split(/\s+/)[0] || 'Renata'
-  const loading = !projectsReady || !tasksReady || !timeReady || !unavailableReady || !clientsReady || !materialsReady || !ideasReady
+  const loading = !projectsReady || !tasksReady || !timeReady || !unavailableReady || !clientsReady || !materialsReady || !ideasReady || !goalsReady
   const timerProjects = summary.activeProjects
   const selectedProject = timerProjects.find((project) => project.id === selectedProjectId)
   const selectedProjectDetails = projects.find((project) => project.id === selectedProjectDetailsId) ?? null
@@ -438,6 +473,8 @@ export function MobileDashboard({ user }: { user: User }) {
       return matchesFavorite && searchable.includes(query)
     })
   }, [ideaQuery, ideas, showFavoriteIdeas])
+  const completedGoals = goals.filter((goal) => goal.current >= goal.target)
+  const overdueGoals = goals.filter((goal) => goal.current < goal.target && Boolean(goal.deadline) && (goal.deadline || '') < summary.today)
   const pageMeta = activePage === 'projects'
     ? { kicker: '🐾 PRODUÇÃO', title: 'Projetos', subtitle: 'Acompanhe todas as etapas das suas peças.' }
     : activePage === 'planning'
@@ -448,7 +485,9 @@ export function MobileDashboard({ user }: { user: User }) {
           ? { kicker: '□ ESTOQUE DO ATELIÊ', title: 'Materiais', subtitle: 'Controle quantidades, custos e o que precisa ser reposto.' }
           : activePage === 'ideas'
             ? { kicker: '✦ BANCO DE INSPIRAÇÕES', title: 'Ideias', subtitle: 'Guarde referências e organize suas próximas criações.' }
-            : { kicker: '⚙ PERSONALIZAÇÃO', title: 'Configurações', subtitle: 'Ajuste os dados e o funcionamento do seu ateliê.' }
+            : activePage === 'settings'
+              ? { kicker: '⚙ PERSONALIZAÇÃO', title: 'Configurações', subtitle: 'Ajuste os dados e o funcionamento do seu ateliê.' }
+              : { kicker: '◎ OBJETIVOS DO ATELIÊ', title: 'Metas', subtitle: 'Acompanhe seus planos e cada avanço conquistado.' }
 
   function openPage(page: MobilePage) {
     setActivePage(page)
@@ -883,6 +922,48 @@ export function MobileDashboard({ user }: { user: User }) {
     }
   }
 
+  function openNewGoal() {
+    setGoalFormError('')
+    setGoalForm({ title: '', type: 'Faturamento', target: '', current: '0', unit: 'R$', deadline: '' })
+  }
+
+  function openEditGoal(goal: Goal) {
+    setGoalFormError('')
+    setGoalForm({ id: goal.id, title: goal.title, type: goal.type, target: String(goal.target), current: String(goal.current), unit: goal.unit, deadline: goal.deadline ? formatInputDate(goal.deadline) : '' })
+  }
+
+  async function saveGoalForm() {
+    if (!goalForm || savingGoal) return
+    const target = Number(goalForm.target.replace(',', '.'))
+    const current = Number(goalForm.current.replace(',', '.'))
+    const deadline = goalForm.deadline ? parseInputDate(goalForm.deadline) : ''
+    if (!goalForm.title.trim()) { setGoalFormError('Informe o nome da meta.'); return }
+    if (!Number.isFinite(target) || target <= 0 || !Number.isFinite(current) || current < 0) { setGoalFormError('Preencha objetivo e progresso com valores válidos.'); return }
+    if (!goalForm.unit.trim()) { setGoalFormError('Informe a unidade da meta.'); return }
+    if (goalForm.deadline && !deadline) { setGoalFormError('Use uma data de prazo válida no formato dia/mês/ano.'); return }
+    setSavingGoal(true)
+    setGoalFormError('')
+    const data = { title: goalForm.title.trim(), type: goalForm.type, target, current, unit: goalForm.unit.trim(), deadline }
+    try {
+      if (goalForm.id) {
+        await updateDoc(doc(db, 'users', user.uid, 'goals', goalForm.id), data)
+      } else {
+        const goalId = `${new Date().toISOString()}-${goals.length}`
+        const batch = writeBatch(db)
+        batch.set(doc(db, 'users', user.uid, 'goals', goalId), { id: goalId, ...data, createdAt: new Date().toISOString() })
+        batch.set(doc(db, 'users', user.uid, 'goals', '_index'), { ids: arrayUnion(goalId), updatedAt: serverTimestamp() }, { merge: true })
+        await batch.commit()
+      }
+      setGoalForm(null)
+      setActionMessage(goalForm.id ? 'Progresso atualizado.' : 'Meta criada com sucesso.')
+      setTimeout(() => setActionMessage(''), 2500)
+    } catch {
+      setGoalFormError('Não foi possível salvar a meta.')
+    } finally {
+      setSavingGoal(false)
+    }
+  }
+
   async function startTimer() {
     if (!selectedProject || activeEntry || timerBusy) return
     setTimerBusy(true)
@@ -1003,6 +1084,7 @@ export function MobileDashboard({ user }: { user: User }) {
             <Pressable onPress={() => openPage('materials')} style={[styles.menuItem, activePage === 'materials' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>□</Text><Text style={styles.menuItemText}>Materiais</Text></Pressable>
             <Pressable onPress={() => openPage('ideas')} style={[styles.menuItem, activePage === 'ideas' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>✦</Text><Text style={styles.menuItemText}>Ideias</Text></Pressable>
             <Pressable onPress={() => openPage('settings')} style={[styles.menuItem, activePage === 'settings' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>⚙</Text><Text style={styles.menuItemText}>Configurações</Text></Pressable>
+            <Pressable onPress={() => openPage('goals')} style={[styles.menuItem, activePage === 'goals' && styles.menuItemActive]}><Text style={styles.menuItemIcon}>◎</Text><Text style={styles.menuItemText}>Metas</Text></Pressable>
             <View style={styles.menuDivider} />
             <View style={styles.menuSync}><View style={styles.liveDot} /><Text style={styles.menuSyncText}>Firebase conectado e sincronizado</Text></View>
             <Pressable onPress={() => signOut(auth)} style={styles.menuLogout}><Text style={styles.menuLogoutText}>Sair da conta</Text></Pressable>
@@ -1275,6 +1357,26 @@ export function MobileDashboard({ user }: { user: User }) {
         </View>
       </Modal>
 
+      <Modal animationType="slide" onRequestClose={() => setGoalForm(null)} transparent visible={Boolean(goalForm)}>
+        <View style={styles.menuBackdrop}>
+          <View style={styles.goalFormSheet}>
+            <View style={styles.menuHeading}>
+              <View style={styles.projectDetailsHeading}><Text style={styles.sectionKicker}>{goalForm?.id ? 'ATUALIZAR META' : 'NOVA META'}</Text><Text style={styles.menuTitle}>{goalForm?.id ? 'Atualizar progresso' : 'Criar uma meta'}</Text></View>
+              <Pressable accessibilityLabel="Fechar formulário" onPress={() => setGoalForm(null)} style={styles.menuClose}><Text style={styles.menuCloseText}>×</Text></Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.formLabel}>NOME DA META</Text><TextInput onChangeText={(title) => setGoalForm((current) => current ? { ...current, title } : current)} placeholder="Ex.: Faturar R$ 2.000 em agosto" placeholderTextColor="#B69B91" style={styles.formInput} value={goalForm?.title || ''} />
+              <Text style={styles.formLabel}>TIPO</Text><View style={styles.goalTypeOptions}>{['Faturamento', 'Encomendas', 'Produção', 'Personalizada'].map((type) => <Pressable key={type} onPress={() => setGoalForm((current) => current ? { ...current, type, unit: goalDefaultUnit(type) } : current)} style={[styles.goalTypeOption, goalForm?.type === type && styles.goalTypeOptionActive]}><Text style={[styles.goalTypeOptionText, goalForm?.type === type && styles.goalTypeOptionTextActive]}>{type}</Text></Pressable>)}</View>
+              <View style={styles.materialNumberRow}><View style={styles.dateInputGroup}><Text style={styles.formLabel}>OBJETIVO</Text><TextInput keyboardType="decimal-pad" onChangeText={(target) => setGoalForm((current) => current ? { ...current, target } : current)} placeholder="0" placeholderTextColor="#B69B91" style={styles.formInput} value={goalForm?.target || ''} /></View><View style={styles.dateInputGroup}><Text style={styles.formLabel}>PROGRESSO ATUAL</Text><TextInput keyboardType="decimal-pad" onChangeText={(currentValue) => setGoalForm((current) => current ? { ...current, current: currentValue } : current)} placeholder="0" placeholderTextColor="#B69B91" style={styles.formInput} value={goalForm?.current || ''} /></View></View>
+              <Text style={styles.formLabel}>UNIDADE</Text><TextInput onChangeText={(unit) => setGoalForm((current) => current ? { ...current, unit } : current)} placeholder="R$, peças ou encomendas" placeholderTextColor="#B69B91" style={styles.formInput} value={goalForm?.unit || ''} />
+              <Text style={styles.formLabel}>PRAZO</Text><TextInput keyboardType="number-pad" maxLength={10} onChangeText={(deadline) => setGoalForm((current) => current ? { ...current, deadline: maskInputDate(deadline) } : current)} placeholder="DD/MM/AAAA (opcional)" placeholderTextColor="#B69B91" style={styles.formInput} value={goalForm?.deadline || ''} />
+              {goalFormError ? <Text style={styles.formError}>{goalFormError}</Text> : null}
+              <Pressable disabled={savingGoal} onPress={saveGoalForm} style={({ pressed }) => [styles.saveTaskButton, (pressed || savingGoal) && styles.buttonPressed]}>{savingGoal ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>{goalForm?.id ? 'Salvar progresso' : 'Criar meta'}</Text>}</Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {activePage === 'home' ? <View style={styles.welcomeCard}>
         <Text style={styles.eyebrow}>{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).toLocaleUpperCase('pt-BR')}</Text>
         <Text style={styles.welcomeTitle}>Olá, {ownerFirstName} 🐾</Text>
@@ -1541,7 +1643,7 @@ export function MobileDashboard({ user }: { user: User }) {
             </View>
           </View>) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>✦</Text><Text style={styles.sectionTitle}>Nenhuma ideia encontrada</Text><Text style={styles.emptyText}>Mude a busca ou toque em + para guardar uma inspiração.</Text></View>}
         </View>
-      ) : (
+      ) : activePage === 'settings' ? (
         <View>
           <View style={styles.settingsCard}>
             <Text style={styles.settingsCardTitle}>Identidade do ateliê</Text>
@@ -1568,6 +1670,32 @@ export function MobileDashboard({ user }: { user: User }) {
           {settingsError ? <Text style={styles.formError}>{settingsError}</Text> : null}
           <Pressable disabled={savingSettings} onPress={saveSettingsForm} style={({ pressed }) => [styles.settingsSaveButton, (pressed || savingSettings) && styles.buttonPressed]}>{savingSettings ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveTaskButtonText}>Salvar configurações</Text>}</Pressable>
         </View>
+      ) : (
+        <View>
+          <View style={styles.goalSummaryRow}>
+            <View style={styles.goalSummaryCard}><Text style={styles.goalSummaryValue}>{goals.length}</Text><Text style={styles.goalSummaryLabel}>Metas</Text></View>
+            <View style={styles.goalSummaryCard}><Text style={[styles.goalSummaryValue, styles.goalSummaryComplete]}>{completedGoals.length}</Text><Text style={styles.goalSummaryLabel}>Concluídas</Text></View>
+            <View style={[styles.goalSummaryCard, overdueGoals.length > 0 && styles.goalSummaryOverdue]}><Text style={[styles.goalSummaryValue, overdueGoals.length > 0 && styles.warningText]}>{overdueGoals.length}</Text><Text style={styles.goalSummaryLabel}>Atrasadas</Text></View>
+          </View>
+          <View style={styles.goalsToolbar}>
+            <Text style={styles.goalCount}>{goals.length ? 'Toque em uma meta para atualizar o progresso.' : 'Crie seu primeiro objetivo para o ateliê.'}</Text>
+            <Pressable accessibilityLabel="Cadastrar meta" onPress={openNewGoal} style={styles.newClientButton}><Text style={styles.newClientButtonText}>＋</Text></Pressable>
+          </View>
+          {goals.length ? goals.map((goal) => {
+            const progress = goal.target > 0 ? Math.min(100, Math.round((goal.current / goal.target) * 100)) : 0
+            const isComplete = goal.current >= goal.target
+            const isOverdue = !isComplete && Boolean(goal.deadline) && (goal.deadline || '') < summary.today
+            return <Pressable key={goal.id} onPress={() => openEditGoal(goal)} style={({ pressed }) => [styles.goalCard, isComplete && styles.goalCardComplete, isOverdue && styles.goalCardOverdue, pressed && styles.projectRowPressed]}>
+              <View style={styles.goalHeading}>
+                <View style={styles.rowBody}><Text style={styles.materialCategory}>{goal.type || 'Meta personalizada'}</Text><Text style={styles.goalTitle}>{goal.title}</Text></View>
+                {isComplete ? <Text style={styles.goalCompleteBadge}>CONCLUÍDA</Text> : isOverdue ? <Text style={styles.lateBadge}>ATRASADA</Text> : <Text style={styles.editGlyph}>✎</Text>}
+              </View>
+              <View style={styles.goalValues}><Text style={styles.goalCurrent}>{displayGoalValue(goal.current, goal.unit)}</Text><Text style={styles.goalTarget}>de {displayGoalValue(goal.target, goal.unit)}</Text><Text style={styles.goalPercent}>{progress}%</Text></View>
+              <View style={styles.goalProgressTrack}><View style={[styles.goalProgressFill, isComplete && styles.goalProgressComplete, isOverdue && styles.goalProgressOverdue, { width: `${progress}%` }]} /></View>
+              <View style={styles.goalFooter}><Text style={styles.goalDeadline}>{goal.deadline ? `Prazo: ${formatShortDate(goal.deadline)}` : 'Sem prazo definido'}</Text><Text style={styles.goalEditHint}>Editar progresso ›</Text></View>
+            </Pressable>
+          }) : <View style={styles.clientEmpty}><Text style={styles.dayEmptyIcon}>◎</Text><Text style={styles.sectionTitle}>Nenhuma meta criada</Text><Text style={styles.emptyText}>Toque no botão + para começar a acompanhar um objetivo.</Text></View>}
+        </View>
       )}
 
       <Pressable onPress={() => signOut(auth)} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
@@ -1579,7 +1707,7 @@ export function MobileDashboard({ user }: { user: User }) {
         <Pressable onPress={() => openPage('home')} style={[styles.navItem, activePage === 'home' && styles.navItemActive]}><Text style={styles.navIcon}>⌂</Text><Text style={styles.navText}>Início</Text></Pressable>
         <Pressable onPress={() => openPage('projects')} style={[styles.navItem, activePage === 'projects' && styles.navItemActive]}><Text style={styles.navIcon}>▦</Text><Text style={styles.navText}>Projetos</Text></Pressable>
         <Pressable onPress={() => openPage('planning')} style={[styles.navItem, activePage === 'planning' && styles.navItemActive]}><Text style={styles.navIcon}>✓</Text><Text style={styles.navText}>Planejamento</Text></Pressable>
-        <Pressable onPress={() => setMenuOpen(true)} style={[styles.navItem, (activePage === 'clients' || activePage === 'materials' || activePage === 'ideas' || activePage === 'settings') && styles.navItemActive]}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
+        <Pressable onPress={() => setMenuOpen(true)} style={[styles.navItem, (activePage === 'clients' || activePage === 'materials' || activePage === 'ideas' || activePage === 'settings' || activePage === 'goals') && styles.navItemActive]}><Text style={styles.navIcon}>☰</Text><Text style={styles.navText}>Menu</Text></Pressable>
       </View>
     </View>
   )
@@ -1686,6 +1814,7 @@ const styles = StyleSheet.create({
   clientFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   materialFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   ideaFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
+  goalFormSheet: { maxHeight: '92%', paddingHorizontal: 20, paddingTop: 21, paddingBottom: 26, borderTopLeftRadius: 27, borderTopRightRadius: 27, backgroundColor: '#FFFBFA' },
   formLabel: { marginTop: 13, marginBottom: 7, color: '#9A7D72', fontSize: 8, fontWeight: '900', letterSpacing: 0.7 },
   formInput: { minHeight: 48, paddingHorizontal: 13, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 12, backgroundColor: '#FFF7F6', color: '#704B3D', fontSize: 12 },
   dateInputRow: { flexDirection: 'row', gap: 9 },
@@ -1696,6 +1825,11 @@ const styles = StyleSheet.create({
   priorityOptionActive: { borderColor: '#D77F8B', backgroundColor: '#F8E3E2' },
   priorityOptionText: { color: '#9A7D72', fontSize: 10, fontWeight: '800' },
   priorityOptionTextActive: { color: '#704B3D' },
+  goalTypeOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  goalTypeOption: { minWidth: '47%', flex: 1, minHeight: 42, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, borderWidth: 1, borderColor: '#E8CFCC', borderRadius: 11, backgroundColor: '#FFF7F6' },
+  goalTypeOptionActive: { borderColor: '#D77F8B', backgroundColor: '#F8E3E2' },
+  goalTypeOptionText: { color: '#9A7D72', fontSize: 9, fontWeight: '800' },
+  goalTypeOptionTextActive: { color: '#704B3D' },
   formProjectOption: { minHeight: 45, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, marginBottom: 6, borderWidth: 1, borderColor: '#EEE0DE', borderRadius: 11 },
   formProjectOptionActive: { borderColor: '#E6A2AA', backgroundColor: '#FBE8E7' },
   formProjectText: { flex: 1, color: '#704B3D', fontSize: 10, fontWeight: '700' },
@@ -1781,6 +1915,31 @@ const styles = StyleSheet.create({
   pauseOptionText: { color: '#9A7D72', fontSize: 9, fontWeight: '900' },
   pauseOptionTextActive: { color: '#704B3D' },
   settingsSaveButton: { minHeight: 51, alignItems: 'center', justifyContent: 'center', marginTop: 14, borderRadius: 13, backgroundColor: '#9A6B56' },
+  goalSummaryRow: { flexDirection: 'row', gap: 7, marginTop: 12 },
+  goalSummaryCard: { flex: 1, minHeight: 78, justifyContent: 'space-between', padding: 12, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 15, backgroundColor: '#FFFBFA' },
+  goalSummaryOverdue: { borderColor: '#EAA0A0', backgroundColor: '#FFF2F1' },
+  goalSummaryValue: { color: '#D77F8B', fontSize: 22, fontWeight: '900' },
+  goalSummaryComplete: { color: '#55795E' },
+  goalSummaryLabel: { color: '#8B6252', fontSize: 8, fontWeight: '800' },
+  goalsToolbar: { minHeight: 61, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  goalCount: { flex: 1, color: '#9A7D72', fontSize: 9, lineHeight: 14 },
+  goalCard: { padding: 17, marginTop: 10, borderWidth: 1, borderColor: '#ECD6D4', borderRadius: 18, backgroundColor: '#FFFBFA' },
+  goalCardComplete: { borderColor: '#B9D8BF', backgroundColor: '#F4FAF5' },
+  goalCardOverdue: { borderColor: '#EAA0A0', backgroundColor: '#FFF5F4' },
+  goalHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  goalTitle: { marginTop: 4, color: '#704B3D', fontFamily: Platform.select({ ios: 'Georgia', android: 'serif' }), fontSize: 16 },
+  goalCompleteBadge: { paddingHorizontal: 8, paddingVertical: 5, overflow: 'hidden', borderRadius: 8, backgroundColor: '#DFEFE3', color: '#55795E', fontSize: 7, fontWeight: '900' },
+  goalValues: { flexDirection: 'row', alignItems: 'baseline', gap: 5, marginTop: 15 },
+  goalCurrent: { color: '#D77F8B', fontSize: 18, fontWeight: '900' },
+  goalTarget: { flex: 1, color: '#A48A80', fontSize: 9 },
+  goalPercent: { color: '#704B3D', fontSize: 10, fontWeight: '900' },
+  goalProgressTrack: { height: 8, marginTop: 8, overflow: 'hidden', borderRadius: 4, backgroundColor: '#F1E3E1' },
+  goalProgressFill: { height: '100%', borderRadius: 4, backgroundColor: '#E59AA3' },
+  goalProgressComplete: { backgroundColor: '#73A276' },
+  goalProgressOverdue: { backgroundColor: '#D86471' },
+  goalFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 11 },
+  goalDeadline: { flex: 1, color: '#9A7D72', fontSize: 8, fontWeight: '700' },
+  goalEditHint: { color: '#D77F8B', fontSize: 8, fontWeight: '900' },
   monthNavigator: { minHeight: 64, flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5, borderRadius: 15, backgroundColor: '#FFF5F4' },
   monthButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#F7DDDC' },
   monthButtonText: { color: '#9A6B56', fontSize: 30, lineHeight: 32, fontWeight: '500' },
