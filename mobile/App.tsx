@@ -7,17 +7,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native'
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { auth } from './src/lib/firebase'
 import { MobileDashboard } from './src/components/MobileDashboard'
 
-export default function App() {
+function AppContent() {
   const [user, setUser] = useState<User | null>(null)
   const [checkingSession, setCheckingSession] = useState(true)
   const [email, setEmail] = useState('')
@@ -85,6 +85,10 @@ export default function App() {
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
+}
+
+export default function App() {
+  return <SafeAreaProvider><AppContent /></SafeAreaProvider>
 }
 
 const styles = StyleSheet.create({
