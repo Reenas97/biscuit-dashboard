@@ -24,6 +24,12 @@
     },
     "plugins": [
       "expo-status-bar"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "427631da-dd94-49fd-90ec-dd66e6407567"
+      }
+    },
+    "owner": "reena97"
   }
 }
