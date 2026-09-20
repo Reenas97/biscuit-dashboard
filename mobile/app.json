@@ -2,7 +2,7 @@
   "expo": {
     "name": "Reena Biscuit",
     "slug": "reena-biscuit",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,6 +11,7 @@
     },
     "android": {
       "package": "com.reenabiscuit.app",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#F8EEEE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -23,7 +24,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#D77F8B"
+        }
+      ]
     ],
     "extra": {
       "eas": {

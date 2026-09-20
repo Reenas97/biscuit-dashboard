@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native'
 import { auth, db } from '../lib/firebase'
+import { dismissActiveTimerNotification, ensureTimerNotificationSetup, showActiveTimerNotification, showPausedTimerNotification } from '../lib/timerNotifications'
 
 type Project = {
   id: string
@@ -416,6 +417,23 @@ export function MobileDashboard({ user }: { user: User }) {
 
   const activeEntry = timeEntries.find((entry) => !entry.endedAt)
   const activeProject = projects.find((project) => project.id === activeEntry?.projectId)
+
+  useEffect(() => {
+    void ensureTimerNotificationSetup().catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    if (activeEntry && activeProject) {
+      void showActiveTimerNotification({
+        uid: user.uid,
+        entryId: activeEntry.id,
+        projectId: activeProject.id,
+        projectTitle: activeProject.title,
+      }).catch(() => undefined)
+      return
+    }
+    void dismissActiveTimerNotification().catch(() => undefined)
+  }, [activeEntry?.id, activeProject?.id, activeProject?.title, user.uid])
 
   useEffect(() => {
     if (!activeEntry) return
@@ -1122,6 +1140,12 @@ export function MobileDashboard({ user }: { user: User }) {
         updatedAt: nowIso,
       }, { merge: true })
       await batch.commit()
+      void showActiveTimerNotification({
+        uid: user.uid,
+        entryId,
+        projectId: selectedProject.id,
+        projectTitle: selectedProject.title,
+      }).catch(() => undefined)
       setSelectedProjectId('')
       setActionMessage(`Cronômetro iniciado para ${selectedProject.title}.`)
       setTimeout(() => setActionMessage(''), 2500)
@@ -1146,6 +1170,12 @@ export function MobileDashboard({ user }: { user: User }) {
         updatedAt: nowIso,
       }, { merge: true })
       await batch.commit()
+      void showPausedTimerNotification({
+        uid: user.uid,
+        entryId: activeEntry.id,
+        projectId: activeEntry.projectId,
+        projectTitle: activeProject?.title || 'Projeto',
+      }).catch(() => undefined)
       setActionMessage('Cronômetro pausado e tempo salvo no projeto.')
       setTimeout(() => setActionMessage(''), 2500)
     } catch {
