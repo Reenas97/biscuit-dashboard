@@ -5,7 +5,7 @@ import { arrayUnion, collection, doc, runTransaction, serverTimestamp } from 'fi
 import { auth, db } from './firebase'
 
 const TIMER_NOTIFICATION_ID = 'reena-biscuit-active-timer'
-const TIMER_CHANNEL_ID = 'reena-biscuit-timer'
+const TIMER_CHANNEL_ID = 'reena-biscuit-timer-lockscreen-v2'
 const TIMER_ACTIVE_CATEGORY = 'reenaTimerActive'
 const TIMER_PAUSED_CATEGORY = 'reenaTimerPaused'
 const TIMER_NOTIFICATION_TASK = 'reena-biscuit-timer-notification-task'
@@ -30,7 +30,7 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
     shouldPlaySound: false,
     shouldSetBadge: false,
-    priority: Notifications.AndroidNotificationPriority.LOW,
+    priority: Notifications.AndroidNotificationPriority.DEFAULT,
   }),
 })
 
@@ -65,6 +65,7 @@ async function showTimerNotification(input: ShowTimerNotificationInput, timerSta
       autoDismiss: false,
       sound: false,
       color: '#D77F8B',
+      priority: Notifications.AndroidNotificationPriority.DEFAULT,
     },
     trigger: { channelId: TIMER_CHANNEL_ID },
   })
@@ -176,9 +177,9 @@ export async function ensureTimerNotificationSetup() {
   if (Platform.OS !== 'android') return false
 
   await Notifications.setNotificationChannelAsync(TIMER_CHANNEL_ID, {
-    name: 'Cronômetro do ateliê',
-    description: 'Mostra o projeto em andamento e permite pausar ou retomar o cronômetro.',
-    importance: Notifications.AndroidImportance.LOW,
+    name: 'Projeto em andamento',
+    description: 'Mostra o projeto em andamento na tela bloqueada e permite pausar ou retomar o cronômetro.',
+    importance: Notifications.AndroidImportance.DEFAULT,
     sound: null,
     enableVibrate: false,
     showBadge: false,
