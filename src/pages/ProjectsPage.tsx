@@ -19,6 +19,7 @@ import {
   FaArrowRight,
   FaBoxesStacked,
   FaCalendarDays,
+  FaCheck,
   FaClipboardList,
   FaClock,
   FaGripVertical,
@@ -71,7 +72,8 @@ type Material = {
 }
 
 type Client = { id: string; name: string }
-type TimeEntry = { id: string; projectId: string; startedAt: string; endedAt?: string; autoPaused?: boolean; pauseReason?: string }
+type TimeEntry = { id: string; projectId: string; startedAt: string; endedAt?: string; autoPaused?: boolean; pauseReason?: string; manuallyAdjusted?: boolean }
+type TimeEntryForm = { startedAt: string; endedAt: string }
 
 type ProjectForm = Omit<Project, 'id' | 'sourceIdeaId' | 'createdAt' | 'tags'> & { tags: string }
 
@@ -113,6 +115,12 @@ function formatDuration(totalSeconds: number) {
 
 function formatLaborValue(seconds: number, hourlyRate: number) {
   return (seconds / 3600 * hourlyRate).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+function toDateTimeLocal(isoValue: string) {
+  const date = new Date(isoValue)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 function KanbanCard({ project, onOpen }: { project: Project; onOpen: (id: string) => void }) {
@@ -165,6 +173,9 @@ export function ProjectsPage() {
   const [materialId, setMaterialId] = useState('')
   const [materialQuantity, setMaterialQuantity] = useState('')
   const [materialError, setMaterialError] = useState('')
+  const [editingTimeEntryId, setEditingTimeEntryId] = useState<string | null>(null)
+  const [timeEntryForm, setTimeEntryForm] = useState<TimeEntryForm | null>(null)
+  const [timeEntryError, setTimeEntryError] = useState('')
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null
   const selectedTimeEntries = selectedProject
     ? timeEntries.filter((entry) => entry.projectId === selectedProject.id).sort((a, b) => b.startedAt.localeCompare(a.startedAt))
@@ -210,6 +221,58 @@ export function ProjectsPage() {
   function saveMaterials(nextMaterials: Material[]) {
     setMaterials(nextMaterials)
     saveLocalData(materialStorageKey, JSON.stringify(nextMaterials))
+  }
+
+  function openTimeEntryEdit(entry: TimeEntry) {
+    setEditingTimeEntryId(entry.id)
+    setTimeEntryForm({
+      startedAt: toDateTimeLocal(entry.startedAt),
+      endedAt: toDateTimeLocal(entry.endedAt ?? new Date().toISOString()),
+    })
+    setTimeEntryError('')
+  }
+
+  function closeTimeEntryEdit() {
+    setEditingTimeEntryId(null)
+    setTimeEntryForm(null)
+    setTimeEntryError('')
+  }
+
+  function saveTimeEntryEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!editingTimeEntryId || !timeEntryForm) return
+    const entry = timeEntries.find((item) => item.id === editingTimeEntryId)
+    const startedAt = new Date(timeEntryForm.startedAt)
+    const endedAt = new Date(timeEntryForm.endedAt)
+
+    if (!entry || Number.isNaN(startedAt.getTime()) || Number.isNaN(endedAt.getTime())) {
+      setTimeEntryError('Informe uma data e um horário válidos para o início e o fim.')
+      return
+    }
+    if (endedAt <= startedAt) {
+      setTimeEntryError('O horário final precisa ser posterior ao horário inicial.')
+      return
+    }
+    if (endedAt.getTime() > Date.now() + 60_000) {
+      setTimeEntryError('O horário final não pode estar no futuro.')
+      return
+    }
+
+    const wasActive = !entry.endedAt
+    const nextEntries = timeEntries.map((item) => item.id === editingTimeEntryId ? {
+      ...item,
+      startedAt: startedAt.toISOString(),
+      endedAt: endedAt.toISOString(),
+      manuallyAdjusted: true,
+      ...(wasActive ? { pauseReason: 'Horário corrigido manualmente' } : {}),
+    } : item)
+    setTimeEntries(nextEntries)
+    saveLocalData(timeStorageKey, JSON.stringify(nextEntries))
+    if (wasActive) {
+      localStorage.removeItem('reena-biscuit-timer-heartbeat')
+      stopTimerHeartbeat('Horário corrigido manualmente').catch(() => undefined)
+    }
+    closeTimeEntryEdit()
   }
 
   function addMaterialToProject(event: FormEvent<HTMLFormElement>) {
@@ -355,7 +418,15 @@ export function ProjectsPage() {
                     const start = new Date(entry.startedAt)
                     const end = entry.endedAt ? new Date(entry.endedAt) : null
                     const seconds = Math.max(0, Math.floor(((end?.getTime() ?? now) - start.getTime()) / 1000))
-                    return <div key={entry.id}><span><strong>{start.toLocaleDateString('pt-BR')}{entry.autoPaused ? ' · pausa automática' : ''}</strong><small>{start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — {end ? end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'em andamento'}{entry.pauseReason ? ` · ${entry.pauseReason}` : ''}</small></span><b>{formatDuration(seconds)}</b></div>
+                    if (editingTimeEntryId === entry.id && timeEntryForm) {
+                      return <form className="project-time-edit" key={entry.id} onSubmit={saveTimeEntryEdit}>
+                        <label>Início<input required type="datetime-local" value={timeEntryForm.startedAt} onChange={(event) => { setTimeEntryForm({ ...timeEntryForm, startedAt: event.target.value }); setTimeEntryError('') }} /></label>
+                        <label>Fim<input required type="datetime-local" value={timeEntryForm.endedAt} onChange={(event) => { setTimeEntryForm({ ...timeEntryForm, endedAt: event.target.value }); setTimeEntryError('') }} /></label>
+                        <div className="project-time-edit-actions"><button className="secondary-button" onClick={closeTimeEntryEdit} type="button">Cancelar</button><button className="primary-button" type="submit"><FaCheck /> Salvar</button></div>
+                        {timeEntryError && <p>{timeEntryError}</p>}
+                      </form>
+                    }
+                    return <div key={entry.id}><span><strong>{start.toLocaleDateString('pt-BR')}{entry.autoPaused ? ' · pausa automática' : ''}{entry.manuallyAdjusted ? ' · ajustado' : ''}</strong><small>{start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — {end ? end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'em andamento'}{entry.pauseReason ? ` · ${entry.pauseReason}` : ''}</small></span><b>{formatDuration(seconds)}</b><button className="project-time-edit-button" onClick={() => openTimeEntryEdit(entry)} type="button" aria-label={`Editar tempo de ${start.toLocaleDateString('pt-BR')}`}><FaPen /> Editar</button></div>
                   })}
                 </div>
               ) : <p className="project-material-empty">Nenhum tempo registrado. Inicie o cronômetro pelo Dashboard.</p>}

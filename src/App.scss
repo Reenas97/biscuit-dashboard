@@ -758,6 +758,14 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .project-time-list span strong { color: $dark-brown; font-size: 11px; }
 .project-time-list span small { color: $muted; font-size: 9px; }
 .project-time-list b { color: $dark-brown; font-size: 11px; white-space: nowrap; }
+.project-time-edit-button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 8px; border: 1px solid $line; border-radius: 8px; background: $paper; color: $brown; font-size: 10px; font-weight: 700; cursor: pointer; }
+.project-time-edit-button:hover { border-color: $pink; color: $dark-brown; }
+.project-time-edit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px; border: 1px solid rgba($pink, .5); border-radius: 10px; background: rgba($paper, .96); }
+.project-time-edit label { display: grid; gap: 5px; color: $muted; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.project-time-edit input { min-width: 0; padding: 9px 10px; border: 1px solid $line; border-radius: 8px; background: white; color: $dark-brown; font: inherit; font-size: 11px; text-transform: none; }
+.project-time-edit-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+.project-time-edit-actions button { min-height: 34px; padding: 7px 11px; font-size: 10px; }
+.project-time-edit > p { grid-column: 1 / -1; margin: 0; color: #a73d49; font-size: 10px; }
 .project-materials { margin-top: 20px; padding: 18px; border: 1px solid $line; border-radius: 14px; background: rgba($cream, .68); }
 .project-materials-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .project-materials-heading h3 { margin: 5px 0 0; color: $dark-brown; font-family: Georgia, serif; font-size: 18px; font-weight: 500; }
@@ -806,6 +814,10 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
   .dashboard-next-project { align-items: flex-start; flex-wrap: wrap; }
   .dashboard-next-project > a { width: 100%; padding-left: 65px; }
   .project-detail-grid { grid-template-columns: 1fr; }
+  .project-time-list > div { align-items: flex-start; flex-wrap: wrap; }
+  .project-time-list span { width: calc(100% - 58px); }
+  .project-time-edit { grid-template-columns: 1fr; }
+  .project-time-edit label, .project-time-edit-actions, .project-time-edit > p { grid-column: 1; }
   .project-material-form { grid-template-columns: 1fr; }
   .project-material-error { grid-column: auto; }
   .transaction-row { grid-template-columns: 40px minmax(0, 1fr) auto; }
