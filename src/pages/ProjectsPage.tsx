@@ -176,6 +176,10 @@ export function ProjectsPage() {
   const [editingTimeEntryId, setEditingTimeEntryId] = useState<string | null>(null)
   const [timeEntryForm, setTimeEntryForm] = useState<TimeEntryForm | null>(null)
   const [timeEntryError, setTimeEntryError] = useState('')
+  const [isEditingTotalTime, setIsEditingTotalTime] = useState(false)
+  const [totalTimeHours, setTotalTimeHours] = useState('0')
+  const [totalTimeMinutes, setTotalTimeMinutes] = useState('0')
+  const [totalTimeError, setTotalTimeError] = useState('')
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null
   const selectedTimeEntries = selectedProject
     ? timeEntries.filter((entry) => entry.projectId === selectedProject.id).sort((a, b) => b.startedAt.localeCompare(a.startedAt))
@@ -224,12 +228,100 @@ export function ProjectsPage() {
   }
 
   function openTimeEntryEdit(entry: TimeEntry) {
+    setIsEditingTotalTime(false)
     setEditingTimeEntryId(entry.id)
     setTimeEntryForm({
       startedAt: toDateTimeLocal(entry.startedAt),
       endedAt: toDateTimeLocal(entry.endedAt ?? new Date().toISOString()),
     })
     setTimeEntryError('')
+  }
+
+  function openTotalTimeEdit() {
+    setEditingTimeEntryId(null)
+    setTimeEntryForm(null)
+    setTimeEntryError('')
+    setTotalTimeHours(String(Math.floor(selectedTimeSeconds / 3600)))
+    setTotalTimeMinutes(String(Math.floor((selectedTimeSeconds % 3600) / 60)))
+    setTotalTimeError('')
+    setIsEditingTotalTime(true)
+  }
+
+  function closeTotalTimeEdit() {
+    setIsEditingTotalTime(false)
+    setTotalTimeError('')
+  }
+
+  function saveTotalTimeEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedProject) return
+    const hours = Number(totalTimeHours)
+    const minutes = Number(totalTimeMinutes)
+    if (!Number.isInteger(hours) || hours < 0 || !Number.isInteger(minutes) || minutes < 0 || minutes > 59) {
+      setTotalTimeError('Informe horas inteiras e minutos entre 0 e 59.')
+      return
+    }
+
+    const desiredSeconds = hours * 3600 + minutes * 60
+    const currentDate = new Date()
+    const nowTime = currentDate.getTime()
+    const nowIso = currentDate.toISOString()
+    const projectEntries = timeEntries.filter((entry) => entry.projectId === selectedProject.id)
+    const hadActiveEntry = projectEntries.some((entry) => !entry.endedAt)
+    const closedEntries = timeEntries.map((entry) => entry.projectId === selectedProject.id && !entry.endedAt ? {
+      ...entry,
+      endedAt: nowIso,
+      pauseReason: 'Tempo total corrigido manualmente',
+      manuallyAdjusted: true,
+    } : entry)
+    const currentSeconds = projectEntries.reduce((total, entry) => {
+      const startedAt = new Date(entry.startedAt).getTime()
+      const endedAt = entry.endedAt ? new Date(entry.endedAt).getTime() : nowTime
+      return total + Math.max(0, Math.floor((endedAt - startedAt) / 1000))
+    }, 0)
+    const difference = desiredSeconds - currentSeconds
+    let nextEntries = closedEntries
+
+    if (difference > 0) {
+      nextEntries = [{
+        id: crypto.randomUUID(),
+        projectId: selectedProject.id,
+        startedAt: new Date(nowTime - difference * 1000).toISOString(),
+        endedAt: nowIso,
+        pauseReason: 'Tempo acrescentado pelo ajuste do total',
+        manuallyAdjusted: true,
+      }, ...closedEntries]
+    } else if (difference < 0) {
+      let secondsToRemove = Math.abs(difference)
+      const adjustedEnds = new Map<string, string>()
+      const newestEntries = closedEntries
+        .filter((entry) => entry.projectId === selectedProject.id)
+        .sort((first, second) => second.startedAt.localeCompare(first.startedAt))
+
+      for (const entry of newestEntries) {
+        if (secondsToRemove <= 0) break
+        const startedAt = new Date(entry.startedAt).getTime()
+        const endedAt = new Date(entry.endedAt ?? nowIso).getTime()
+        const duration = Math.max(0, Math.floor((endedAt - startedAt) / 1000))
+        const removed = Math.min(duration, secondsToRemove)
+        adjustedEnds.set(entry.id, new Date(startedAt + (duration - removed) * 1000).toISOString())
+        secondsToRemove -= removed
+      }
+
+      nextEntries = closedEntries.map((entry) => adjustedEnds.has(entry.id) ? {
+        ...entry,
+        endedAt: adjustedEnds.get(entry.id),
+        manuallyAdjusted: true,
+      } : entry)
+    }
+
+    setTimeEntries(nextEntries)
+    saveLocalData(timeStorageKey, JSON.stringify(nextEntries))
+    if (hadActiveEntry) {
+      localStorage.removeItem('reena-biscuit-timer-heartbeat')
+      stopTimerHeartbeat('Tempo total corrigido manualmente').catch(() => undefined)
+    }
+    closeTotalTimeEdit()
   }
 
   function closeTimeEntryEdit() {
@@ -410,8 +502,14 @@ export function ProjectsPage() {
             <section className="project-time">
               <div className="project-time-heading">
                 <div><span className="section-kicker"><FaClock /> TEMPO TRABALHADO</span><h3>Horas neste projeto</h3></div>
-                <strong>{formatDuration(selectedTimeSeconds)}</strong>
+                <div className="project-time-total"><strong>{formatDuration(selectedTimeSeconds)}</strong><button onClick={openTotalTimeEdit} type="button"><FaPen /> Editar total</button></div>
               </div>
+              {isEditingTotalTime && <form className="project-time-total-edit" onSubmit={saveTotalTimeEdit}>
+                <label>Horas<input required min="0" step="1" type="number" value={totalTimeHours} onChange={(event) => { setTotalTimeHours(event.target.value); setTotalTimeError('') }} /></label>
+                <label>Minutos<input required min="0" max="59" step="1" type="number" value={totalTimeMinutes} onChange={(event) => { setTotalTimeMinutes(event.target.value); setTotalTimeError('') }} /></label>
+                <div><button className="secondary-button" onClick={closeTotalTimeEdit} type="button">Cancelar</button><button className="primary-button" type="submit"><FaCheck /> Salvar total</button></div>
+                {totalTimeError && <p>{totalTimeError}</p>}
+              </form>}
               {selectedTimeEntries.length > 0 ? (
                 <div className="project-time-list">
                   {selectedTimeEntries.map((entry) => {

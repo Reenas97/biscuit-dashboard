@@ -752,6 +752,16 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
 .project-time-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .project-time-heading h3 { margin: 5px 0 0; color: $dark-brown; font-family: Georgia, serif; font-size: 18px; font-weight: 500; }
 .project-time-heading > strong { color: $brown; font-family: Georgia, serif; font-size: 20px; font-weight: 500; white-space: nowrap; }
+.project-time-total { display: grid; justify-items: end; gap: 5px; }
+.project-time-total strong { color: $brown; font-family: Georgia, serif; font-size: 20px; font-weight: 500; white-space: nowrap; }
+.project-time-total button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: $brown; font-size: 10px; font-weight: 700; cursor: pointer; }
+.project-time-total button:hover { color: $dark-brown; }
+.project-time-total-edit { display: grid; grid-template-columns: repeat(2, minmax(0, 120px)) 1fr; align-items: end; gap: 10px; margin-top: 14px; padding: 12px; border: 1px solid rgba($pink, .5); border-radius: 10px; background: rgba($paper, .96); }
+.project-time-total-edit label { display: grid; gap: 5px; color: $muted; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.project-time-total-edit input { min-width: 0; padding: 9px 10px; border: 1px solid $line; border-radius: 8px; background: white; color: $dark-brown; font: inherit; font-size: 11px; text-transform: none; }
+.project-time-total-edit > div { display: flex; justify-content: flex-end; gap: 8px; }
+.project-time-total-edit > div button { min-height: 34px; padding: 7px 11px; font-size: 10px; }
+.project-time-total-edit > p { grid-column: 1 / -1; margin: 0; color: #a73d49; font-size: 10px; }
 .project-time-list { display: grid; gap: 7px; max-height: 190px; margin-top: 15px; overflow-y: auto; }
 .project-time-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 11px; border-radius: 10px; background: rgba($paper, .88); }
 .project-time-list span { display: grid; gap: 2px; }
@@ -816,6 +826,8 @@ h1 { margin-bottom: 0; font-family: Georgia, serif; font-size: 28px; font-weight
   .project-detail-grid { grid-template-columns: 1fr; }
   .project-time-list > div { align-items: flex-start; flex-wrap: wrap; }
   .project-time-list span { width: calc(100% - 58px); }
+  .project-time-total-edit { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-time-total-edit > div, .project-time-total-edit > p { grid-column: 1 / -1; }
   .project-time-edit { grid-template-columns: 1fr; }
   .project-time-edit label, .project-time-edit-actions, .project-time-edit > p { grid-column: 1; }
   .project-material-form { grid-template-columns: 1fr; }
